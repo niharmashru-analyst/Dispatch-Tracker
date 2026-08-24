@@ -208,7 +208,7 @@ st.markdown("""
 @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 
 html, body, [class*="css"] { font-family:'Inter', sans-serif; }
-.stApp { background:#12151A; color:#ffffff; }
+.stApp { background:#12151A; color:#E9EBEF; }
 
 h1, h2, h3 {
     font-family:'Barlow Condensed', sans-serif !important;
