@@ -36,13 +36,12 @@ st.set_page_config(page_title="Stock Gap Dashboard", layout="wide", page_icon="�
 CONFIG = {
     # Row number (1-indexed) where the real column headers sit in
     # every stock sheet.
-    "stock_header_row": 6,
+    "stock_header_row": 1,
 
     # Which sheets to read from the stock workbook, and which column
     # LETTER holds EAN / Product Name in each one.
     "stock_sheets": [
-        {"name": "Product_level _EPD", "ean_col": "B", "name_col": "D"},
-        {"name": "Product_level_NPD", "ean_col": "B", "name_col": "D"},
+        {"name": "Sheet1", "ean_col": "A", "name_col": "B"},
     ],
 
     # Header TEXT (not column letter) for each stock quantity type —
@@ -172,6 +171,17 @@ def load_orders(url: str) -> pd.DataFrame:
     return odf
 
 
+def parse_uploaded_orders(file_bytes: bytes, filename: str, header_row: int) -> pd.DataFrame:
+    """Parse an uploaded order file (.xlsx/.xls/.csv) using a user-chosen header row."""
+    hdr_idx = header_row - 1
+    if filename.lower().endswith(".csv"):
+        odf = pd.read_csv(io.BytesIO(file_bytes), header=hdr_idx)
+    else:
+        odf = pd.read_excel(io.BytesIO(file_bytes), header=hdr_idx)
+    odf.columns = [str(c).strip() for c in odf.columns]
+    return odf
+
+
 st.markdown("""
 <style>
 .stApp { background: #12151A; color: #E9EBEF; }
@@ -184,16 +194,12 @@ div[data-testid="stMetricValue"] { font-family:'IBM Plex Mono', monospace; }
 """, unsafe_allow_html=True)
 
 st.title("📉 Stock Gap Dashboard")
-st.caption("Matches a live order sheet against live stock — no file uploads needed.")
+st.caption("Matches an order sheet against live stock. Order sheet can be read live or uploaded.")
 
 stock_url = st.secrets.get("STOCK_EXCEL_URL", "")
-order_url = st.secrets.get("STOCK_ORDER_EXCEL_URL", "")
 
-if not stock_url or not order_url:
-    st.error(
-        "Missing links. Add **STOCK_EXCEL_URL** and **STOCK_ORDER_EXCEL_URL** "
-        "to this app's Secrets."
-    )
+if not stock_url:
+    st.error("Missing link. Add **STOCK_EXCEL_URL** to this app's Secrets.")
     st.stop()
 
 top_l, top_r = st.columns([5, 1])
@@ -205,10 +211,54 @@ with top_r:
 
 try:
     stock_df = load_stock(stock_url)
-    order_df = load_orders(order_url)
 except Exception as e:
-    st.error(f"Could not load one of the live files: {e}")
+    st.error(f"Could not load the live stock file: {e}")
     st.stop()
+
+# ------------------------------------------------------------
+# ORDER SHEET SOURCE — live link (reads the configured
+# STOCK_ORDER_EXCEL_URL) or a one-off upload with a chosen header row.
+# ------------------------------------------------------------
+st.markdown("#### Order Sheet")
+order_source = st.radio(
+    "Order sheet source", ["Live Link", "Upload File"], horizontal=True, label_visibility="collapsed"
+)
+
+order_df = None
+
+if order_source == "Live Link":
+    order_url = st.secrets.get("STOCK_ORDER_EXCEL_URL", "")
+    if not order_url:
+        st.error(
+            "No live order link configured. Add **STOCK_ORDER_EXCEL_URL** to this "
+            "app's Secrets, or switch to **Upload File** above."
+        )
+        st.stop()
+    try:
+        order_df = load_orders(order_url)
+    except Exception as e:
+        st.error(f"Could not load the live order file: {e}")
+        st.stop()
+else:
+    up_col1, up_col2 = st.columns([3, 1])
+    with up_col1:
+        uploaded_order_file = st.file_uploader(
+            "Choose order file (.xlsx / .xls / .csv)", type=["xlsx", "xls", "csv"], key="order_upload"
+        )
+    with up_col2:
+        header_row = st.number_input(
+            "Header row #", min_value=1, value=CONFIG["order_header_row"], step=1, key="order_header_row_input"
+        )
+
+    if uploaded_order_file is None:
+        st.info("Upload an order sheet to continue.")
+        st.stop()
+
+    try:
+        order_df = parse_uploaded_orders(uploaded_order_file.getvalue(), uploaded_order_file.name, int(header_row))
+    except Exception as e:
+        st.error(f"Could not parse the uploaded order file: {e}")
+        st.stop()
 
 if stock_df.empty:
     st.warning("No stock rows loaded — check CONFIG sheet names/columns still match the live workbook.")
