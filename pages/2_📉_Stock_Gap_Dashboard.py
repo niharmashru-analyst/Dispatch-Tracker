@@ -62,6 +62,24 @@ CONFIG = {
 }
 
 
+def _normalize_key(val) -> str:
+    """Turns any EAN/SKU value into a consistent lookup key.
+    Excel often stores the same code as an int in one file and a
+    float (e.g. 8906121646924.0) in another — usually because a
+    blank cell elsewhere in the column forced pandas to upcast the
+    whole column to float. Without this, those two would never match."""
+    if pd.isna(val):
+        return ""
+    s = str(val).strip()
+    if s.endswith(".0"):
+        try:
+            float(s)
+            s = s[:-2]
+        except ValueError:
+            pass
+    return s.lower()
+
+
 def _col_letter_to_index(letter: str) -> int:
     letter = letter.strip().upper()
     idx = 0
@@ -140,10 +158,13 @@ def load_stock(url: str) -> pd.DataFrame:
         for i in range(len(sdf)):
             if pd.isna(ean_series.iloc[i]):
                 continue
-            ean = str(ean_series.iloc[i]).strip()
-            if not ean:
+            ean_raw = ean_series.iloc[i]
+            key = _normalize_key(ean_raw)
+            if not key:
                 continue
-            key = ean.lower()
+            ean = str(ean_raw).strip()
+            if ean.endswith(".0") and key == ean[:-2].lower():
+                ean = ean[:-2]  # display the clean code too, not "...924.0"
             name = str(name_series.iloc[i]).strip() if pd.notna(name_series.iloc[i]) else ""
             mwh = float(mwh_series.iloc[i]) if mwh_series is not None and pd.notna(mwh_series.iloc[i]) else 0.0
             blr = float(blr_series.iloc[i]) if blr_series is not None and pd.notna(blr_series.iloc[i]) else 0.0
@@ -184,12 +205,31 @@ def parse_uploaded_orders(file_bytes: bytes, filename: str, header_row: int) -> 
 
 st.markdown("""
 <style>
-.stApp { background: #12151A; color: #E9EBEF; }
-h1, h2, h3 { color: #E9EBEF; }
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+html, body, [class*="css"] { font-family:'Inter', sans-serif; }
+.stApp { background:#12151A; color:#E9EBEF; }
+
+h1, h2, h3 {
+    font-family:'Barlow Condensed', sans-serif !important;
+    font-weight:700 !important; color:#E9EBEF; text-transform:uppercase;
+}
+
 div[data-testid="stMetric"] {
     background:#1B1F27; border:1px solid #2C313C; border-radius:10px; padding:16px 18px;
 }
-div[data-testid="stMetricValue"] { font-family:'IBM Plex Mono', monospace; }
+div[data-testid="stMetricLabel"] {
+    font-family:'IBM Plex Mono', monospace !important; font-size:10.5px !important;
+    letter-spacing:1.2px; text-transform:uppercase; color:#8B93A3 !important;
+}
+div[data-testid="stMetricValue"] {
+    font-family:'Barlow Condensed', sans-serif !important; font-weight:700 !important;
+}
+
+.stCaption, [data-testid="stCaptionContainer"] { font-family:'Inter', sans-serif; color:#8B93A3; }
+
+/* dataframe / table text */
+[data-testid="stDataFrame"] * { font-family:'Inter', sans-serif; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -303,13 +343,13 @@ st.caption(
 # ------------------------------------------------------------
 stock_map = {}
 for _, r in stock_df.iterrows():
-    key = str(r["ean"]).strip().lower() if match_mode == "EAN" else str(r["product"]).strip().lower()
+    key = _normalize_key(r["ean"]) if match_mode == "EAN" else str(r["product"]).strip().lower()
     stock_map[key] = r
 
 
 def _compute_row(order_row):
     raw_key = order_row[key_col]
-    key = str(raw_key).strip().lower() if pd.notna(raw_key) else ""
+    key = _normalize_key(raw_key) if match_mode == "EAN" else (str(raw_key).strip().lower() if pd.notna(raw_key) else "")
     order_qty = pd.to_numeric(order_row[qty_col], errors="coerce")
     order_qty = 0.0 if pd.isna(order_qty) else float(order_qty)
 
@@ -346,11 +386,20 @@ if results is not None and len(results):
     total_skus = len(results)
     short_skus = int((results["status"] == "stockout").sum())
     units_short = float(results["short"].fillna(0).sum())
+    missing_skus = int((results["status"] == "missing").sum())
 
     m1, m2, m3 = st.columns(3)
     m1.metric("SKUs Ordered", f"{total_skus:,}")
     m2.metric("SKUs Short / Out", f"{short_skus:,}")
     m3.metric("Units Short", f"{units_short:,.0f}")
+
+    if missing_skus and missing_skus / total_skus > 0.3:
+        st.warning(
+            f"⚠️ {missing_skus:,} of {total_skus:,} order rows ({missing_skus/total_skus:.0%}) didn't "
+            f"match any stock row — double-check the **{match_mode}** column you picked on the order "
+            "sheet actually lines up with the stock file's EAN/product values. Use the **Not Found** "
+            "filter below to see them."
+        )
 
     fcol, scol = st.columns([2, 1])
     with fcol:
