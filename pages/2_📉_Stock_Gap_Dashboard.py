@@ -256,6 +256,8 @@ except Exception as e:
     st.error(f"Could not load the live stock file: {e}")
     st.stop()
 
+st.caption(f"Stock source: **Live Link** → `{stock_url.split('?')[0]}`")
+
 # ------------------------------------------------------------
 # ORDER SHEET SOURCE — live link (reads the configured
 # STOCK_ORDER_EXCEL_URL) or a one-off upload with a chosen header row.
@@ -308,6 +310,20 @@ if stock_df.empty:
 skipped = stock_df.attrs.get("skipped_sheets", [])
 if skipped:
     st.caption(f"⚠️ Skipped sheet(s) not found in the workbook: {', '.join(skipped)} — check CONFIG.")
+
+# ------------------------------------------------------------
+# LOADED-DATA PREVIEW — shows exactly what was fetched, so a
+# wrong link/file (e.g. STOCK_ORDER_EXCEL_URL pointing at the
+# stock workbook by mistake) is obvious immediately.
+# ------------------------------------------------------------
+with st.expander(f"🔍 Loaded order data preview — {len(order_df):,} rows, {len(order_df.columns)} columns", expanded=False):
+    if order_source == "Live Link":
+        masked = order_url.split("?")[0]
+        st.caption(f"Source: **Live Link** → `{masked}`")
+    else:
+        st.caption(f"Source: **Uploaded file** → `{uploaded_order_file.name}`")
+    st.write("Columns:", list(order_df.columns))
+    st.dataframe(order_df.head(5), use_container_width=True, hide_index=True)
 
 # ------------------------------------------------------------
 # SETUP CONTROLS
