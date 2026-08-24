@@ -62,6 +62,24 @@ CONFIG = {
 }
 
 
+def _normalize_key(val) -> str:
+    """Turns any EAN/SKU value into a consistent lookup key.
+    Excel often stores the same code as an int in one file and a
+    float (e.g. 8906121646924.0) in another — usually because a
+    blank cell elsewhere in the column forced pandas to upcast the
+    whole column to float. Without this, those two would never match."""
+    if pd.isna(val):
+        return ""
+    s = str(val).strip()
+    if s.endswith(".0"):
+        try:
+            float(s)
+            s = s[:-2]
+        except ValueError:
+            pass
+    return s.lower()
+
+
 def _col_letter_to_index(letter: str) -> int:
     letter = letter.strip().upper()
     idx = 0
@@ -140,10 +158,13 @@ def load_stock(url: str) -> pd.DataFrame:
         for i in range(len(sdf)):
             if pd.isna(ean_series.iloc[i]):
                 continue
-            ean = str(ean_series.iloc[i]).strip()
-            if not ean:
+            ean_raw = ean_series.iloc[i]
+            key = _normalize_key(ean_raw)
+            if not key:
                 continue
-            key = ean.lower()
+            ean = str(ean_raw).strip()
+            if ean.endswith(".0") and key == ean[:-2].lower():
+                ean = ean[:-2]  # display the clean code too, not "...924.0"
             name = str(name_series.iloc[i]).strip() if pd.notna(name_series.iloc[i]) else ""
             mwh = float(mwh_series.iloc[i]) if mwh_series is not None and pd.notna(mwh_series.iloc[i]) else 0.0
             blr = float(blr_series.iloc[i]) if blr_series is not None and pd.notna(blr_series.iloc[i]) else 0.0
@@ -163,14 +184,6 @@ def load_stock(url: str) -> pd.DataFrame:
     return result
 
 
-@st.cache_data(ttl=300, show_spinner="Fetching latest orders…")
-def load_orders(url: str) -> pd.DataFrame:
-    raw = _fetch_bytes(url)
-    odf = pd.read_excel(io.BytesIO(raw), header=CONFIG["order_header_row"] - 1)
-    odf.columns = [str(c).strip() for c in odf.columns]
-    return odf
-
-
 def parse_uploaded_orders(file_bytes: bytes, filename: str, header_row: int) -> pd.DataFrame:
     """Parse an uploaded order file (.xlsx/.xls/.csv) using a user-chosen header row."""
     hdr_idx = header_row - 1
@@ -184,12 +197,32 @@ def parse_uploaded_orders(file_bytes: bytes, filename: str, header_row: int) -> 
 
 st.markdown("""
 <style>
-.stApp { background: #12151A; color: #E9EBEF; }
-h1, h2, h3 { color: #E9EBEF; }
-div[data-testid="stMetric"] {
-    background:#1B1F27; border:1px solid #2C313C; border-radius:10px; padding:16px 18px;
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+html, body, [class*="css"] { font-family:'Inter', sans-serif; }
+.stApp { background:#F4F6FA; }
+
+h1, h2, h3 {
+    font-family:'Barlow Condensed', sans-serif !important;
+    font-weight:700 !important; text-transform:uppercase;
 }
-div[data-testid="stMetricValue"] { font-family:'IBM Plex Mono', monospace; }
+
+div[data-testid="stMetric"] {
+    background:#fff; border:1px solid #E4E7ED; border-radius:14px; padding:14px 16px;
+    box-shadow:0 1px 3px rgba(0,0,0,.08);
+}
+div[data-testid="stMetricLabel"] {
+    font-family:'IBM Plex Mono', monospace !important; font-size:10.5px !important;
+    letter-spacing:1.2px; text-transform:uppercase; color:#8B93A3 !important;
+}
+div[data-testid="stMetricValue"] {
+    font-family:'Barlow Condensed', sans-serif !important; font-weight:700 !important;
+}
+
+.stCaption, [data-testid="stCaptionContainer"] { font-family:'Inter', sans-serif; color:#8B93A3; }
+
+/* dataframe / table text */
+[data-testid="stDataFrame"] * { font-family:'Inter', sans-serif; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -216,49 +249,31 @@ except Exception as e:
     st.stop()
 
 # ------------------------------------------------------------
-# ORDER SHEET SOURCE — live link (reads the configured
-# STOCK_ORDER_EXCEL_URL) or a one-off upload with a chosen header row.
+# ORDER SHEET SOURCE — upload only (choose the header row).
 # ------------------------------------------------------------
 st.markdown("#### Order Sheet")
-order_source = st.radio(
-    "Order sheet source", ["Live Link", "Upload File"], horizontal=True, label_visibility="collapsed"
-)
 
 order_df = None
 
-if order_source == "Live Link":
-    order_url = st.secrets.get("STOCK_ORDER_EXCEL_URL", "")
-    if not order_url:
-        st.error(
-            "No live order link configured. Add **STOCK_ORDER_EXCEL_URL** to this "
-            "app's Secrets, or switch to **Upload File** above."
-        )
-        st.stop()
-    try:
-        order_df = load_orders(order_url)
-    except Exception as e:
-        st.error(f"Could not load the live order file: {e}")
-        st.stop()
-else:
-    up_col1, up_col2 = st.columns([3, 1])
-    with up_col1:
-        uploaded_order_file = st.file_uploader(
-            "Choose order file (.xlsx / .xls / .csv)", type=["xlsx", "xls", "csv"], key="order_upload"
-        )
-    with up_col2:
-        header_row = st.number_input(
-            "Header row #", min_value=1, value=CONFIG["order_header_row"], step=1, key="order_header_row_input"
-        )
+up_col1, up_col2 = st.columns([3, 1])
+with up_col1:
+    uploaded_order_file = st.file_uploader(
+        "Choose order file (.xlsx / .xls / .csv)", type=["xlsx", "xls", "csv"], key="order_upload"
+    )
+with up_col2:
+    header_row = st.number_input(
+        "Header row #", min_value=1, value=CONFIG["order_header_row"], step=1, key="order_header_row_input"
+    )
 
-    if uploaded_order_file is None:
-        st.info("Upload an order sheet to continue.")
-        st.stop()
+if uploaded_order_file is None:
+    st.info("Upload an order sheet to continue.")
+    st.stop()
 
-    try:
-        order_df = parse_uploaded_orders(uploaded_order_file.getvalue(), uploaded_order_file.name, int(header_row))
-    except Exception as e:
-        st.error(f"Could not parse the uploaded order file: {e}")
-        st.stop()
+try:
+    order_df = parse_uploaded_orders(uploaded_order_file.getvalue(), uploaded_order_file.name, int(header_row))
+except Exception as e:
+    st.error(f"Could not parse the uploaded order file: {e}")
+    st.stop()
 
 if stock_df.empty:
     st.warning("No stock rows loaded — check CONFIG sheet names/columns still match the live workbook.")
@@ -267,6 +282,15 @@ if stock_df.empty:
 skipped = stock_df.attrs.get("skipped_sheets", [])
 if skipped:
     st.caption(f"⚠️ Skipped sheet(s) not found in the workbook: {', '.join(skipped)} — check CONFIG.")
+
+# ------------------------------------------------------------
+# LOADED-DATA PREVIEW — shows exactly what was fetched, so a
+# wrong file is obvious immediately.
+# ------------------------------------------------------------
+with st.expander(f"🔍 Loaded order data preview — {len(order_df):,} rows, {len(order_df.columns)} columns", expanded=False):
+    st.caption(f"Source: **Uploaded file** → `{uploaded_order_file.name}`")
+    st.write("Columns:", list(order_df.columns))
+    st.dataframe(order_df.head(5), use_container_width=True, hide_index=True)
 
 # ------------------------------------------------------------
 # SETUP CONTROLS
@@ -303,13 +327,13 @@ st.caption(
 # ------------------------------------------------------------
 stock_map = {}
 for _, r in stock_df.iterrows():
-    key = str(r["ean"]).strip().lower() if match_mode == "EAN" else str(r["product"]).strip().lower()
+    key = _normalize_key(r["ean"]) if match_mode == "EAN" else str(r["product"]).strip().lower()
     stock_map[key] = r
 
 
 def _compute_row(order_row):
     raw_key = order_row[key_col]
-    key = str(raw_key).strip().lower() if pd.notna(raw_key) else ""
+    key = _normalize_key(raw_key) if match_mode == "EAN" else (str(raw_key).strip().lower() if pd.notna(raw_key) else "")
     order_qty = pd.to_numeric(order_row[qty_col], errors="coerce")
     order_qty = 0.0 if pd.isna(order_qty) else float(order_qty)
 
@@ -346,11 +370,20 @@ if results is not None and len(results):
     total_skus = len(results)
     short_skus = int((results["status"] == "stockout").sum())
     units_short = float(results["short"].fillna(0).sum())
+    missing_skus = int((results["status"] == "missing").sum())
 
     m1, m2, m3 = st.columns(3)
     m1.metric("SKUs Ordered", f"{total_skus:,}")
     m2.metric("SKUs Short / Out", f"{short_skus:,}")
     m3.metric("Units Short", f"{units_short:,.0f}")
+
+    if missing_skus and missing_skus / total_skus > 0.3:
+        st.warning(
+            f"⚠️ {missing_skus:,} of {total_skus:,} order rows ({missing_skus/total_skus:.0%}) didn't "
+            f"match any stock row — double-check the **{match_mode}** column you picked on the order "
+            "sheet actually lines up with the stock file's EAN/product values. Use the **Not Found** "
+            "filter below to see them."
+        )
 
     fcol, scol = st.columns([2, 1])
     with fcol:
