@@ -62,24 +62,6 @@ CONFIG = {
 }
 
 
-def _normalize_key(val) -> str:
-    """Turns any EAN/SKU value into a consistent lookup key.
-    Excel often stores the same code as an int in one file and a
-    float (e.g. 8906121646924.0) in another — usually because a
-    blank cell elsewhere in the column forced pandas to upcast the
-    whole column to float. Without this, those two would never match."""
-    if pd.isna(val):
-        return ""
-    s = str(val).strip()
-    if s.endswith(".0"):
-        try:
-            float(s)
-            s = s[:-2]
-        except ValueError:
-            pass
-    return s.lower()
-
-
 def _col_letter_to_index(letter: str) -> int:
     letter = letter.strip().upper()
     idx = 0
@@ -158,13 +140,10 @@ def load_stock(url: str) -> pd.DataFrame:
         for i in range(len(sdf)):
             if pd.isna(ean_series.iloc[i]):
                 continue
-            ean_raw = ean_series.iloc[i]
-            key = _normalize_key(ean_raw)
-            if not key:
+            ean = str(ean_series.iloc[i]).strip()
+            if not ean:
                 continue
-            ean = str(ean_raw).strip()
-            if ean.endswith(".0") and key == ean[:-2].lower():
-                ean = ean[:-2]  # display the clean code too, not "...924.0"
+            key = ean.lower()
             name = str(name_series.iloc[i]).strip() if pd.notna(name_series.iloc[i]) else ""
             mwh = float(mwh_series.iloc[i]) if mwh_series is not None and pd.notna(mwh_series.iloc[i]) else 0.0
             blr = float(blr_series.iloc[i]) if blr_series is not None and pd.notna(blr_series.iloc[i]) else 0.0
@@ -205,32 +184,12 @@ def parse_uploaded_orders(file_bytes: bytes, filename: str, header_row: int) -> 
 
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
-
-html, body, [class*="css"] { font-family:'Inter', sans-serif; }
-.stApp { background:#F4F6FA; }
-
-h1, h2, h3 {
-    font-family:'Barlow Condensed', sans-serif !important;
-    font-weight:700 !important; text-transform:uppercase;
-}
-
+.stApp { background: #12151A; color: #E9EBEF; }
+h1, h2, h3 { color: #E9EBEF; }
 div[data-testid="stMetric"] {
-    background:#fff; border:1px solid #E4E7ED; border-radius:14px; padding:14px 16px;
-    box-shadow:0 1px 3px rgba(0,0,0,.08);
+    background:#1B1F27; border:1px solid #2C313C; border-radius:10px; padding:16px 18px;
 }
-div[data-testid="stMetricLabel"] {
-    font-family:'IBM Plex Mono', monospace !important; font-size:10.5px !important;
-    letter-spacing:1.2px; text-transform:uppercase; color:#8B93A3 !important;
-}
-div[data-testid="stMetricValue"] {
-    font-family:'Barlow Condensed', sans-serif !important; font-weight:700 !important;
-}
-
-.stCaption, [data-testid="stCaptionContainer"] { font-family:'Inter', sans-serif; color:#8B93A3; }
-
-/* dataframe / table text */
-[data-testid="stDataFrame"] * { font-family:'Inter', sans-serif; }
+div[data-testid="stMetricValue"] { font-family:'IBM Plex Mono', monospace; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -255,8 +214,6 @@ try:
 except Exception as e:
     st.error(f"Could not load the live stock file: {e}")
     st.stop()
-
-st.caption(f"Stock source: **Live Link** → `{stock_url.split('?')[0]}`")
 
 # ------------------------------------------------------------
 # ORDER SHEET SOURCE — live link (reads the configured
@@ -312,20 +269,6 @@ if skipped:
     st.caption(f"⚠️ Skipped sheet(s) not found in the workbook: {', '.join(skipped)} — check CONFIG.")
 
 # ------------------------------------------------------------
-# LOADED-DATA PREVIEW — shows exactly what was fetched, so a
-# wrong link/file (e.g. STOCK_ORDER_EXCEL_URL pointing at the
-# stock workbook by mistake) is obvious immediately.
-# ------------------------------------------------------------
-with st.expander(f"🔍 Loaded order data preview — {len(order_df):,} rows, {len(order_df.columns)} columns", expanded=False):
-    if order_source == "Live Link":
-        masked = order_url.split("?")[0]
-        st.caption(f"Source: **Live Link** → `{masked}`")
-    else:
-        st.caption(f"Source: **Uploaded file** → `{uploaded_order_file.name}`")
-    st.write("Columns:", list(order_df.columns))
-    st.dataframe(order_df.head(5), use_container_width=True, hide_index=True)
-
-# ------------------------------------------------------------
 # SETUP CONTROLS
 # ------------------------------------------------------------
 c1, c2, c3 = st.columns(3)
@@ -360,13 +303,13 @@ st.caption(
 # ------------------------------------------------------------
 stock_map = {}
 for _, r in stock_df.iterrows():
-    key = _normalize_key(r["ean"]) if match_mode == "EAN" else str(r["product"]).strip().lower()
+    key = str(r["ean"]).strip().lower() if match_mode == "EAN" else str(r["product"]).strip().lower()
     stock_map[key] = r
 
 
 def _compute_row(order_row):
     raw_key = order_row[key_col]
-    key = _normalize_key(raw_key) if match_mode == "EAN" else (str(raw_key).strip().lower() if pd.notna(raw_key) else "")
+    key = str(raw_key).strip().lower() if pd.notna(raw_key) else ""
     order_qty = pd.to_numeric(order_row[qty_col], errors="coerce")
     order_qty = 0.0 if pd.isna(order_qty) else float(order_qty)
 
@@ -403,20 +346,11 @@ if results is not None and len(results):
     total_skus = len(results)
     short_skus = int((results["status"] == "stockout").sum())
     units_short = float(results["short"].fillna(0).sum())
-    missing_skus = int((results["status"] == "missing").sum())
 
     m1, m2, m3 = st.columns(3)
     m1.metric("SKUs Ordered", f"{total_skus:,}")
     m2.metric("SKUs Short / Out", f"{short_skus:,}")
     m3.metric("Units Short", f"{units_short:,.0f}")
-
-    if missing_skus and missing_skus / total_skus > 0.3:
-        st.warning(
-            f"⚠️ {missing_skus:,} of {total_skus:,} order rows ({missing_skus/total_skus:.0%}) didn't "
-            f"match any stock row — double-check the **{match_mode}** column you picked on the order "
-            "sheet actually lines up with the stock file's EAN/product values. Use the **Not Found** "
-            "filter below to see them."
-        )
 
     fcol, scol = st.columns([2, 1])
     with fcol:
