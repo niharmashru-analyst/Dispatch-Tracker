@@ -208,15 +208,16 @@ st.markdown("""
 @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 
 html, body, [class*="css"] { font-family:'Inter', sans-serif; }
-.stApp { background:#12151A; color:#E9EBEF; }
+.stApp { background:#F4F6FA; }
 
 h1, h2, h3 {
     font-family:'Barlow Condensed', sans-serif !important;
-    font-weight:700 !important; color:#E9EBEF; text-transform:uppercase;
+    font-weight:700 !important; text-transform:uppercase;
 }
 
 div[data-testid="stMetric"] {
-    background:#1B1F27; border:1px solid #2C313C; border-radius:10px; padding:16px 18px;
+    background:#fff; border:1px solid #E4E7ED; border-radius:14px; padding:14px 16px;
+    box-shadow:0 1px 3px rgba(0,0,0,.08);
 }
 div[data-testid="stMetricLabel"] {
     font-family:'IBM Plex Mono', monospace !important; font-size:10.5px !important;
