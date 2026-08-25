@@ -38,10 +38,10 @@ CONFIG = {
     # edit this list, or just adjust it live on the page below.
     "cancel_terms": [
         "Order below 7k",
-        "Customer cancelled",
-        "Duplicate order",
-        "Out of delivery area",
-        "Address not found",
+        "Below 7k Value Cancel",
+        "Cancel Under 5K Value",
+        "Cancelled",
+        "Out of Stock",
     ],
 
     # Columns shown by default in the results table.
