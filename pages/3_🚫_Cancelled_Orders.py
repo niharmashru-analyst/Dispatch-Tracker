@@ -29,7 +29,7 @@ st.set_page_config(page_title="Cancelled Orders", layout="wide", page_icon="🚫
 CONFIG = {
     # Column in the dispatch tracker that holds the cancellation reason.
     # Change this if your sheet uses a different header.
-    "cancel_column": "Final Remarks",
+    "cancel_column": "Wh. Remarks",
 
     # Phrases that mark a row as cancelled. Matching is a
     # case-insensitive substring match, so "order below 7k" also
