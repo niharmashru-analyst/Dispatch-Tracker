@@ -1,56 +1,70 @@
 """
-ORDER TRACKING — SEARCH & FILTER TOOL
+CANCELLED ORDERS — filtered view of the dispatch tracker
 ------------------------------------------------------------
-Reads LIVE from a SharePoint/OneDrive Excel file (view-only share
-link) — no manual upload needed. Whoever updates that file, this
-app reflects it (cached 5 min, or hit "Refresh Now" for instantly).
+Reads the same live dispatch tracker file used by the Order Tracking
+page (SHAREPOINT_EXCEL_URL secret) and shows only the rows whose
+remarks column matches one of a small set of "cancelled" phrases —
+e.g. "Order below 7k". Edit CANCEL_COLUMN / CANCEL_TERMS below, or
+use the "Manage cancel terms" box on the page itself, whenever the
+exact wording changes.
 
-SETUP (one-time):
-  1. In SharePoint/OneDrive, get a share link for the file with
-     "Anyone with the link can view" (or your org's equivalent).
-  2. Add it to Streamlit secrets:
-       Local:  create .streamlit/secrets.toml with:
-                   SHAREPOINT_EXCEL_URL = "https://....?e=xxxx"
-       Streamlit Cloud: App -> Settings -> Secrets -> paste the same line.
-  3. requirements.txt needs: streamlit, pandas, openpyxl, requests
-
-Run with:  streamlit run order_search_app.py
+Drop this file into the same pages/ folder as the other dashboard
+pages so Streamlit's sidebar picks it up automatically. Rename it
+with a leading number (e.g. 3_Cancelled_Orders.py) to control where
+it sits in the sidebar relative to the other pages.
 ------------------------------------------------------------
 """
 
 import io
+import re
 import requests
 import pandas as pd
 import streamlit as st
 
-st.set_page_config(page_title="Order Tracking Search", layout="wide", page_icon="📦")
+st.set_page_config(page_title="Cancelled Orders", layout="wide", page_icon="🚫")
 
-SHEET_NAME = None  # None = first sheet. Set an exact tab name if the workbook has multiple tabs.
+# ================================================================
+# CONFIG — edit any time the remarks wording or column changes.
+# ================================================================
+CONFIG = {
+    # Column in the dispatch tracker that holds the cancellation reason.
+    # Change this if your sheet uses a different header.
+    "cancel_column": "Wh. Remarks",
 
-# ------------------------------------------------------------
-# Column typing is inferred from name patterns, since the source
-# sheet mixes text-formatted currency ("₹ 1,827"), plain numbers,
-# dates, and percentages in one flat table.
-# ------------------------------------------------------------
-DATE_COL_HINTS = ["date"]
-CURRENCY_COL_HINTS = ["value", "lacs", "sale loss"]
-PERCENT_COL_HINTS = ["%"]
+    # Phrases that mark a row as cancelled. Matching is a
+    # case-insensitive substring match, so "order below 7k" also
+    # catches "Order Below 7K - customer declined", etc.
+    # This is a starting guess for the 4-5 terms you mentioned —
+    # edit this list, or just adjust it live on the page below.
+    "cancel_terms": [
+        "Order below 7k",
+        "Customer cancelled",
+        "Duplicate order",
+        "Out of delivery area",
+        "Address not found",
+    ],
 
-# Columns a free-text search box matches against.
+    # Columns shown by default in the results table.
+    "default_visible_columns": [
+        "Order Id", "Customer Name", "Order Received Date", "Order Qty",
+        "Order Value", "AWB NUMBER", "COURIER", "Final Remarks",
+    ],
+}
+
+# Columns the free-text search box matches against — same list as
+# the Order Tracking page.
 SEARCH_COLUMNS = [
     "Order Id", "AWB NUMBER", "InvoiceNumber", "Customer Name",
     "External Document No.", "SRO Number",
 ]
 
-# Shown by default in the results table — team can change via the
-# "Columns to show" picker.
-DEFAULT_VISIBLE_COLUMNS = [
-    "Order Id", "Customer Name", "Order Received Date", "Order Qty",
-    "Order Value", "AWB NUMBER", "COURIER", "Delivery Status", "Standard TAT",
-]
-
-# Dropdown filters shown in the Filters expander.
+# Dropdown filters shown in the Filters expander — same list as
+# the Order Tracking page.
 FILTER_COLUMNS = ["DB Code", "Name", "Final Remarks", "InvoiceNumber", "Category"]
+
+DATE_COL_HINTS = ["date"]
+CURRENCY_COL_HINTS = ["value", "lacs", "sale loss"]
+PERCENT_COL_HINTS = ["%"]
 
 C_BG = "#F4F6FA"
 
@@ -61,10 +75,6 @@ def _looks_like(col, hints):
 
 
 def _sharepoint_download_url(url: str) -> str:
-    """Turn a SharePoint/OneDrive 'view' share link into a direct
-    download link. For org 'Anyone with the link' share links,
-    appending download=1 makes SharePoint stream the raw file
-    instead of the web viewer page."""
     if "download=1" in url:
         return url
     sep = "&" if "?" in url else "?"
@@ -83,8 +93,8 @@ def load_data(url: str) -> pd.DataFrame:
             "'Anyone with the link can view')."
         )
 
-    df = pd.read_excel(io.BytesIO(resp.content), sheet_name=SHEET_NAME)
-    if isinstance(df, dict):  # sheet_name=None returns {sheet: df} when multiple tabs exist
+    df = pd.read_excel(io.BytesIO(resp.content), sheet_name=None)
+    if isinstance(df, dict):  # multiple tabs -> take the first one
         df = next(iter(df.values()))
     df.columns = [str(c).strip() for c in df.columns]
 
@@ -116,13 +126,14 @@ div[data-testid="stMetric"] {{
 </style>
 """, unsafe_allow_html=True)
 
-st.title("📦 Order Tracking — Search & Filter")
+st.title("🚫 Cancelled Orders")
+st.caption("Rows from the dispatch tracker whose remarks match a configured cancel reason.")
 
 sp_url = st.secrets.get("SHAREPOINT_EXCEL_URL", "")
 if not sp_url:
     st.error(
         "No SharePoint link configured. Add SHAREPOINT_EXCEL_URL to this app's "
-        "Secrets (see the setup note at the top of order_search_app.py)."
+        "Secrets (the same link used by the Order Tracking page)."
     )
     st.stop()
 
@@ -141,10 +152,56 @@ except Exception as e:
 if "Order Id" not in df.columns:
     st.warning("Heads up: no 'Order Id' column found — the full-detail lookup at the bottom needs it to work.")
 
-st.caption(f"{len(df):,} orders loaded · cached up to 5 min, or hit **Refresh Now** for the latest")
+cancel_col = CONFIG["cancel_column"]
+if cancel_col not in df.columns:
+    st.error(
+        f"Column '{cancel_col}' not found in the dispatch tracker. "
+        f"Available columns: {', '.join(df.columns)}. "
+        "Update CONFIG['cancel_column'] at the top of this file to match."
+    )
+    st.stop()
 
 # ------------------------------------------------------------
-# SEARCH + FILTERS
+# TERMS — editable on the page, seeded from CONFIG above.
+# ------------------------------------------------------------
+with st.expander("Manage cancel terms", expanded=False):
+    active_terms = st.multiselect(
+        "Terms that mark a row as cancelled (substring match, case-insensitive)",
+        options=CONFIG["cancel_terms"],
+        default=CONFIG["cancel_terms"],
+        key="active_cancel_terms",
+    )
+    extra_terms_raw = st.text_input(
+        "Add extra terms (comma-separated)", key="extra_cancel_terms"
+    )
+    extra_terms = [t.strip() for t in extra_terms_raw.split(",") if t.strip()]
+
+all_terms = [t for t in (active_terms + extra_terms) if t]
+
+if not all_terms:
+    st.warning("No cancel terms selected — pick at least one above to see results.")
+    st.stop()
+
+pattern = "|".join(re.escape(t) for t in all_terms)
+mask = df[cancel_col].astype(str).str.contains(pattern, case=False, na=False, regex=True)
+cancelled = df[mask].copy()
+
+st.caption(f"Matching terms: {', '.join(all_terms)}")
+
+# ------------------------------------------------------------
+# METRICS
+# ------------------------------------------------------------
+m1, m2 = st.columns(2)
+m1.metric("Cancelled Orders", f"{len(cancelled):,}")
+value_col = next(
+    (c for c in cancelled.columns if "order" in c.lower() and _looks_like(c, ["value"])), None
+)
+if value_col:
+    m2.metric("Cancelled Value", f"₹ {cancelled[value_col].fillna(0).sum():,.0f}")
+
+# ------------------------------------------------------------
+# SEARCH + FILTERS — same behavior as the Order Tracking page,
+# applied on top of the cancelled-only rows.
 # ------------------------------------------------------------
 search_term = st.text_input(
     "🔍 Search",
@@ -154,41 +211,42 @@ search_term = st.text_input(
 with st.expander("Filters"):
     fcols = st.columns(3)
     active_filters = {}
-    filter_cols_present = [c for c in FILTER_COLUMNS if c in df.columns]
+    filter_cols_present = [c for c in FILTER_COLUMNS if c in cancelled.columns]
     for i, col in enumerate(filter_cols_present):
         with fcols[i % 3]:
-            options = sorted(df[col].dropna().astype(str).unique().tolist())
+            options = sorted(cancelled[col].dropna().astype(str).unique().tolist())
             picked = st.multiselect(col, options, key=f"filter_{col}")
             if picked:
                 active_filters[col] = picked
 
-filtered = df.copy()
+filtered = cancelled.copy()
 if search_term:
     present_search_cols = [c for c in SEARCH_COLUMNS if c in filtered.columns]
-    mask = pd.Series(False, index=filtered.index)
+    mask2 = pd.Series(False, index=filtered.index)
     for c in present_search_cols:
-        mask |= filtered[c].astype(str).str.contains(search_term, case=False, na=False)
-    filtered = filtered[mask]
+        mask2 |= filtered[c].astype(str).str.contains(search_term, case=False, na=False)
+    filtered = filtered[mask2]
 
 for col, vals in active_filters.items():
     filtered = filtered[filtered[col].astype(str).isin(vals)]
 
 # ------------------------------------------------------------
-# COLUMN PICKER — team chooses what shows in the results table.
-# Collapsible, same as Filters above, so it can be closed once set.
+# COLUMN PICKER
 # ------------------------------------------------------------
 all_cols = list(df.columns)
-default_cols = [c for c in DEFAULT_VISIBLE_COLUMNS if c in all_cols] or all_cols[:8]
+default_cols = [c for c in CONFIG["default_visible_columns"] if c in all_cols] or all_cols[:8]
 with st.expander("Columns to show"):
-    visible_cols = st.multiselect("Columns to show", all_cols, default=default_cols,
-                                   key="visible_cols", label_visibility="collapsed")
+    visible_cols = st.multiselect(
+        "Columns to show", all_cols, default=default_cols,
+        key="visible_cols", label_visibility="collapsed",
+    )
 if not visible_cols:
     visible_cols = default_cols
 
 # ------------------------------------------------------------
 # RESULTS TABLE
 # ------------------------------------------------------------
-st.markdown(f"**{len(filtered):,} of {len(df):,} orders**")
+st.markdown(f"**{len(filtered):,} of {len(cancelled):,} cancelled orders**")
 
 display_df = filtered[visible_cols].copy()
 column_config = {}
@@ -204,18 +262,22 @@ st.dataframe(
     display_df, use_container_width=True, hide_index=True, height=560, column_config=column_config,
 )
 
+csv = display_df.to_csv(index=False).encode("utf-8")
+st.download_button("⬇️ Export CSV", csv, file_name="cancelled_orders.csv", mime="text/csv")
+
 
 # ------------------------------------------------------------
-# FULL-DETAIL LOOKUP — every column for one order, in a dialog
+# FULL-DETAIL LOOKUP — every column for one order, in a dialog.
+# Same as the Order Tracking page, scoped to cancelled orders.
 # ------------------------------------------------------------
 @st.dialog("Order Details", width="large")
 def show_full_details(order_id):
-    row = df[df["Order Id"].astype(str) == str(order_id)]
+    row = cancelled[cancelled["Order Id"].astype(str) == str(order_id)]
     if row.empty:
         st.warning("Order not found.")
         return
     row = row.iloc[0]
-    for col in df.columns:
+    for col in cancelled.columns:
         val = row[col]
         if pd.isna(val) or val == "":
             continue
