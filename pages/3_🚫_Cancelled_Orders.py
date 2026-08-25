@@ -40,8 +40,8 @@ CONFIG = {
         "Order below 7k",
         "Below 7k Value Cancel",
         "Cancel Under 5K Value",
-        "Cancelled",
-        "Out of Stock",
+        "Low Qty Not Processed",
+        "Out Of Stock",
     ],
 
     # Columns shown by default in the results table.
