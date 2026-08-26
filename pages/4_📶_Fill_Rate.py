@@ -381,9 +381,9 @@ shop_agg["fill_rate"] = _fill_rate(shop_agg["invoice_qty"], shop_agg["order_qty"
 # always shown, since it's the clickable row key).
 metric_options = ["Order Qty", "Invoice Qty", "Fill Rate"]
 if has_order_id:
-    metric_options.insert(0, "Order Id (count)")
+    metric_options.insert(0, "Order (count)")
 if has_invoice_no:
-    metric_options.insert(1 if has_order_id else 0, "InvoiceNumber (count)")
+    metric_options.insert(1 if has_order_id else 0, "Invoice (count)")
 if has_sale_loss:
     metric_options.append("Sale Loss (In Lacs)")
 if has_tat:
@@ -400,8 +400,8 @@ if not visible_metrics:
 # Maps each display label to the underlying shop_agg column used for
 # both sorting and rendering.
 SORT_KEY_MAP = {
-    "Order Id (count)": "order_count",
-    "InvoiceNumber (count)": "invoice_count",
+    "Order (count)": "order_count",
+    "Invoice (count)": "invoice_count",
     "Order Qty": "order_qty",
     "Invoice Qty": "invoice_qty",
     "Fill Rate": "fill_rate",
