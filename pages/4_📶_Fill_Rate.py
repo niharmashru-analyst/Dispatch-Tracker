@@ -1805,99 +1805,44 @@ previous = (
 # DELTA FUNCTIONS
 # ============================================================
 
-def currency_delta(
-    current_value,
-    previous_value,
-):
+def number_delta(current_value, previous_value):
 
     if previous_value is None:
         return None
 
-    difference = (
-        current_value
-        - previous_value
-    )
+    difference = current_value - previous_value
 
-    return f"₹ {difference:+,.0f}"
-        )
-
-    if difference < 0:
-
-        return (
-            f"↓ {abs(difference):,.0f}"
-        )
-
-    return "—"
+    return f"{difference:+,.0f}"
 
 
-def percent_delta(
-    current_value,
-    previous_value,
-):
+def percent_delta(current_value, previous_value):
 
     if previous_value is None:
         return None
 
-    difference = (
-        current_value
-        - previous_value
-    )
+    difference = current_value - previous_value
 
     return f"{difference:+.1f}%"
 
-def currency_delta(
-    current_value,
-    previous_value,
-):
+
+def currency_delta(current_value, previous_value):
 
     if previous_value is None:
         return None
 
-    difference = (
-        current_value
-        - previous_value
-    )
+    difference = current_value - previous_value
 
-    if difference > 0:
-
-        return (
-            f"↑ ₹ {difference:,.0f}"
-        )
-
-    if difference < 0:
-
-        return (
-            f"↓ ₹ {abs(difference):,.0f}"
-        )
-
-    return "—"
+    return f"₹ {difference:+,.0f}"
 
 
-def sale_loss_delta(
-    current_value,
-    previous_value,
-):
+def sale_loss_delta(current_value, previous_value):
 
     if previous_value is None:
         return None
 
-    difference = (
-        current_value
-        - previous_value
-    )
+    difference = current_value - previous_value
 
     return f"₹ {difference:+,.2f}"
-)
-
-    if difference < 0:
-
-        return (
-            f"↓ ₹ {abs(difference):,.2f}"
-        )
-
-    return "—"
-
-
 # ============================================================
 # EXECUTIVE CARD ROW 1
 #
