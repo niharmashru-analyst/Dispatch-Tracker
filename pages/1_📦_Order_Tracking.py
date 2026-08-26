@@ -272,11 +272,25 @@ def show_full_details(order_id):
         st.warning("Order not found.")
         return
     row = row.iloc[0]
+
+    detail_rows = []
     for col in df.columns:
         val = row[col]
         if pd.isna(val) or val == "":
             continue
-        st.markdown(f"**{col}:** {val}")
+        if isinstance(val, pd.Timestamp):
+            val = val.strftime("%d-%m-%Y")
+        detail_rows.append({"Field": col, "Value": val})
+
+    details_df = pd.DataFrame(detail_rows)
+    st.dataframe(
+        details_df, use_container_width=True, hide_index=True,
+        height=min(560, 38 * len(details_df) + 38),
+        column_config={
+            "Field": st.column_config.TextColumn("Field", width="medium"),
+            "Value": st.column_config.TextColumn("Value", width="large"),
+        },
+    )
 
     st.markdown("---")
     st.markdown("**Order Line Items**")
