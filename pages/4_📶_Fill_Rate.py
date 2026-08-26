@@ -1,1847 +1,612 @@
-import io
-import re
-from datetime import datetime
+"""
+FILL RATE — chain comparison + shop-level drill-down
+------------------------------------------------------------
+Reads the same live dispatch tracker used by the other pages
+(SHAREPOINT_EXCEL_URL secret). Shows:
 
+  1. A bar chart comparing Fill Rate (Invoice Qty / Order Qty) across
+     chains ("Name" column).
+  2. Filters (Name / InvoiceNumber / Order Id / Final Remarks) — sit
+     between the chart and the table, and narrow both the chart and
+     the shop table below.
+  3. A summary table, one row per shop ("Customer Name"), with total
+     Order Qty / Invoice Qty / Fill Rate / Sale Loss / TAT (avg) for
+     that shop. Click any column header to sort by it (toggles
+     Ascending -> Descending -> Normal). Click a shop's name (a plain
+     button — no checkboxes) to open a detail popup with every
+     individual order row for that shop, including DB Code, Category,
+     Standard TAT (right after Actual Deli. Days), and TAT (shown as
+     the very last column).
+
+Drop this file into the same pages/ folder as the other dashboard
+pages. Rename with a leading number (e.g. 4_Fill_Rate.py) to control
+where it sits in the sidebar.
+
+NOTE ON ASSUMPTIONS (edit CONFIG below if any of these are wrong):
+  - "Order Id" / "InvoiceNumber" in the shop SUMMARY table are shown
+    as a COUNT of distinct orders/invoices for that shop (a shop
+    usually has many of each) — not a single ID. The full IDs are
+    all visible in the per-shop detail popup.
+  - "Wh Receiving Date", "Invoice Date", "Delivery Date",
+    "Actual Deli. Days", "Variance", "DB Code", "Category",
+    "Standard TAT" are assumed to already exist as columns in the
+    dispatch tracker (same naming as the sheet). Column matching is
+    case/whitespace-tolerant, so small header differences (extra
+    spaces, different casing) still resolve correctly.
+  - "TAT" is assumed to be its own column already in (or being added
+    to) the dispatch tracker sheet, holding a number (days). We don't
+    rename/relabel it — whatever header you give it in the sheet is
+    what shows up here. In the shop detail popup it's placed as the
+    LAST column. In the shop summary table it's shown as an average
+    ("TAT (avg)") and is a selectable/sortable metric like the rest.
+    If the actual column name in your sheet differs from "TAT",
+    update CONFIG["tat_column"] below.
+------------------------------------------------------------
+"""
+
+import io
 import requests
 import pandas as pd
-import numpy as np
-import streamlit as st
 import altair as alt
+import streamlit as st
 
+st.set_page_config(page_title="Fill Rate", layout="wide", page_icon="📶")
 
-# ============================================================
-# PAGE CONFIG
-# ============================================================
-
-st.set_page_config(
-    page_title="MOM Operations Dashboard",
-    page_icon="📊",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
-
-
-# ============================================================
-# THEME / CSS
-# ============================================================
-
-st.markdown(
-    """
-    <style>
-
-    /* ---------- GLOBAL ---------- */
-
-    .stApp {
-        background: #0B0F14;
-        color: #F3F4F6;
-    }
-
-    section[data-testid="stSidebar"] {
-        background: #080B10;
-        border-right: 1px solid #20252D;
-    }
-
-    section[data-testid="stSidebar"] * {
-        color: #E5E7EB;
-    }
-
-    h1, h2, h3 {
-        color: #F9FAFB !important;
-    }
-
-    p, label, span {
-        color: #D1D5DB;
-    }
-
-
-    /* ---------- METRIC CARDS ---------- */
-
-    div[data-testid="stMetric"] {
-        background: #11161D;
-        border: 1px solid #252B34;
-        border-radius: 14px;
-        padding: 16px 18px;
-        box-shadow: 0 4px 16px rgba(0,0,0,.18);
-    }
-
-    div[data-testid="stMetricLabel"] {
-        color: #9CA3AF !important;
-    }
-
-    div[data-testid="stMetricValue"] {
-        color: #F9FAFB !important;
-    }
-
-    div[data-testid="stMetricDelta"] {
-        color: #D1D5DB !important;
-    }
-
-
-    /* ---------- CONTAINERS ---------- */
-
-    div[data-testid="stVerticalBlockBorderWrapper"] {
-        background: #11161D;
-        border: 1px solid #252B34;
-        border-radius: 14px;
-    }
-
-
-    /* ---------- BUTTONS ---------- */
-
-    .stButton > button {
-        border-radius: 8px;
-        border: 1px solid #303743;
-        background: #151B23;
-        color: #F3F4F6;
-        font-weight: 600;
-    }
-
-    .stButton > button:hover {
-        border-color: #6366F1;
-        color: #FFFFFF;
-    }
-
-
-    /* ---------- TABLE ---------- */
-
-    div[data-testid="stDataFrame"] {
-        border: 1px solid #252B34;
-        border-radius: 10px;
-        overflow: hidden;
-    }
-
-
-    /* ---------- TABS ---------- */
-
-    button[data-baseweb="tab"] {
-        color: #9CA3AF;
-        font-weight: 600;
-    }
-
-    button[data-baseweb="tab"][aria-selected="true"] {
-        color: #FFFFFF;
-    }
-
-
-    /* ---------- EXPANDER ---------- */
-
-    details {
-        background: #11161D;
-        border: 1px solid #252B34;
-        border-radius: 10px;
-    }
-
-
-    /* ---------- INFO ---------- */
-
-    .dashboard-subtitle {
-        color: #9CA3AF;
-        font-size: 14px;
-        margin-top: -10px;
-        margin-bottom: 20px;
-    }
-
-    .section-title {
-        font-size: 20px;
-        font-weight: 700;
-        color: #F9FAFB;
-        margin-top: 20px;
-        margin-bottom: 10px;
-    }
-
-    .small-muted {
-        color: #6B7280;
-        font-size: 12px;
-    }
-
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
-
-# ============================================================
-# CONFIG
-# ============================================================
-
+# ================================================================
+# CONFIG — edit any time a column name changes in the source sheet.
+# ================================================================
 CONFIG = {
-
-    # Excel source
-    "sharepoint_secret": "SHAREPOINT_ORDER_ITEMS_URL",
-
-    # Main dimensions
-    "chain": "Gen. Bus. Posting Group",
-    "customer": "Customer Name",
-    "location": "Location Code",
-    "customer_no": "Sell-to Customer No.",
-    "sku": "No.",
-    "gtin": "GTIN",
-    "description": "Description",
-
-    # Order identifiers
-    "order_key": "Order SKU Key",
-    "document_no": "Document No.",
-
-    # Quantities
-    "order_qty": "Order Qty",
-    "invoice_qty": "Invoice Qty",
-    "balance_qty": "Balance Qty",
-
-    # Values
-    "order_value": "Order Amt. Exc. GST",
-    "invoice_value": "Invoice Amt. Exc. GST",
-    "balance_value": "Balance Amt",
-
-    # Invoice
-    "invoice_no": "Invoice No.",
-    "invoice_status": "Invoice Status",
-
-    # Dates
-    "order_date": "Order Date",
-    "invoice_date": "Invoice Date",
-
-    # Inventory
-    "amd_inventory": "AMD WH Inventory",
-    "blr_inventory": "DS_BLR Inv",
-    "nh_inventory": "NH WH Inv",
+    "chain_column": "Name",
+    "shop_column": "Customer Name",
+    "order_id_column": "Order Id",
+    "invoice_number_column": "InvoiceNumber",
+    "order_qty_column": "Order Qty",
+    "invoice_qty_column": "Invoice Qty",
+    "sale_loss_column": "Sale Loss",
+    "wh_receiving_date_column": "Wh Receiving Date",
+    "invoice_date_column": "Invoice Date",
+    "delivery_date_column": "Delivery Date",
+    "actual_delivery_days_column": "Actual Deli. Days",
+    "variance_column": "Variance",
+    "db_code_column": "DB Code",
+    "category_column": "Category",
+    "tat_column": "TAT",
+    "standard_tat_column": "Standard TAT",
 }
 
-
-# ============================================================
-# MONTH ORDER
-# ============================================================
-
-MONTH_ORDER = [
-    "Jan",
-    "Feb",
-    "Mar",
-    "Apr",
-    "May",
-    "Jun",
-    "Jul",
-    "Aug",
-    "Sep",
-    "Oct",
-    "Nov",
-    "Dec",
+FILTER_COLUMNS = [
+    CONFIG["chain_column"], CONFIG["invoice_number_column"],
+    CONFIG["order_id_column"], "Final Remarks",
 ]
 
+DEFAULT_SORT_KEY = "fill_rate"
+DEFAULT_SORT_ASC = True  # worst fill rate first
 
-# ============================================================
-# HELPER FUNCTIONS
-# ============================================================
+DATE_COL_HINTS = ["date"]
+CURRENCY_COL_HINTS = ["value", "lacs", "sale loss"]
+PERCENT_COL_HINTS = ["%"]
+# Order Qty / Invoice Qty / TAT aren't caught by the hints above, but
+# Excel often leaves numeric-looking columns as text (stray spaces,
+# commas, a blank cell forcing the whole column to object dtype) —
+# which makes pandas' groupby(...).sum()/.mean() raise a TypeError.
+# Force these to numeric explicitly. "tat" also catches "Standard TAT".
+QTY_COL_HINTS = ["qty", "quantity", "tat"]
 
-def normalize_column_name(value):
-    return str(value).strip()
-
-
-def clean_numeric(series):
-    """
-    Converts Excel numeric-looking columns to numeric.
-    Handles commas, currency symbols, blanks, etc.
-    """
-    return pd.to_numeric(
-        series.astype(str)
-        .str.replace(",", "", regex=False)
-        .str.replace("₹", "", regex=False)
-        .str.replace("$", "", regex=False)
-        .str.replace("%", "", regex=False)
-        .str.strip()
-        .replace(
-            {
-                "": np.nan,
-                "nan": np.nan,
-                "None": np.nan,
-                "NaN": np.nan,
-            }
-        ),
-        errors="coerce",
-    )
+C_BG = "#F4F6FA"
 
 
-def format_number(value):
-    if value is None or pd.isna(value):
-        return "—"
-    return f"{value:,.0f}"
+def _looks_like(col, hints):
+    c = col.lower()
+    return any(h in c for h in hints)
 
 
-def format_value(value):
-    if value is None or pd.isna(value):
-        return "—"
-
-    abs_value = abs(value)
-
-    if abs_value >= 10_000_000:
-        return f"₹ {value / 10_000_000:.2f} Cr"
-
-    if abs_value >= 100_000:
-        return f"₹ {value / 100_000:.2f} L"
-
-    return f"₹ {value:,.0f}"
-
-
-def format_percent(value):
-    if value is None or pd.isna(value):
-        return "—"
-
-    return f"{value:.1f}%"
-
-
-def safe_pct(numerator, denominator):
-    if denominator == 0 or pd.isna(denominator):
-        return np.nan
-
-    return numerator / denominator * 100
-
-
-def mom_delta(current, previous):
-    if previous is None or pd.isna(previous):
-        return np.nan
-
-    return current - previous
-
-
-def resolve_column(target, columns):
-    """
-    Case/space tolerant column resolver.
-    """
-
-    if target in columns:
+def _resolve_col(target, available_cols):
+    """Match a configured column name against the sheet's real headers,
+    tolerating case and stray whitespace differences (e.g. CONFIG says
+    "Standard TAT" but the sheet has " standard tat " or "STANDARD TAT").
+    Returns the actual column name to use, or None if no match at all."""
+    if target in available_cols:
         return target
-
-    target_key = str(target).strip().lower()
-
-    for col in columns:
-        if str(col).strip().lower() == target_key:
-            return col
-
+    target_key = target.strip().lower()
+    for c in available_cols:
+        if str(c).strip().lower() == target_key:
+            return c
     return None
 
 
-def clean_sheet_name(sheet_name):
-    return str(sheet_name).strip()
-
-
-def month_sort_key(month):
-    try:
-        return MONTH_ORDER.index(month)
-    except ValueError:
-        return 999
-
-
-# ============================================================
-# LOAD EXCEL
-# ============================================================
-
-def get_download_url(url):
-
-    if not url:
+def _sharepoint_download_url(url: str) -> str:
+    if "download=1" in url:
         return url
-
-    if "download=1" in url.lower():
-        return url
-
-    separator = "&" if "?" in url else "?"
-
-    return f"{url}{separator}download=1"
+    sep = "&" if "?" in url else "?"
+    return f"{url}{sep}download=1"
 
 
-@st.cache_data(
-    ttl=300,
-    show_spinner="Loading monthly Excel data..."
-)
-def load_workbook(url):
-
-    download_url = get_download_url(url)
-
-    response = requests.get(
-        download_url,
-        timeout=60,
-        allow_redirects=True,
-    )
-
-    response.raise_for_status()
-
-    content_type = response.headers.get(
-        "Content-Type",
-        "",
-    )
-
-    if "html" in content_type.lower():
-
+@st.cache_data(ttl=300, show_spinner="Fetching latest data…")
+def load_data(url: str) -> pd.DataFrame:
+    resp = requests.get(_sharepoint_download_url(url), timeout=30)
+    resp.raise_for_status()
+    ctype = resp.headers.get("Content-Type", "")
+    if "html" in ctype.lower():
         raise ValueError(
-            "SharePoint returned a login/HTML page instead of "
-            "the Excel workbook. Check the SharePoint sharing "
-            "permission and make sure the link can download the file."
+            "Got a login/redirect page instead of the Excel file — "
+            "the share link likely needs broader access (set it to "
+            "'Anyone with the link can view')."
         )
 
-    workbook = pd.read_excel(
-        io.BytesIO(response.content),
-        sheet_name=None,
-        engine="openpyxl",
-    )
+    df = pd.read_excel(io.BytesIO(resp.content), sheet_name=None)
+    if isinstance(df, dict):  # multiple tabs -> take the first one
+        df = next(iter(df.values()))
+    df.columns = [str(c).strip() for c in df.columns]
 
-    return workbook
-
-
-# ============================================================
-# COMBINE MONTHLY SHEETS
-# ============================================================
-
-@st.cache_data(
-    ttl=300,
-    show_spinner="Preparing MOM dataset..."
-)
-def prepare_data(url):
-
-    workbook = load_workbook(url)
-
-    frames = []
-
-    for sheet_name, sheet_df in workbook.items():
-
-        sheet_name = clean_sheet_name(sheet_name)
-
-        # Only process sheets that look like month names.
-        if sheet_name not in MONTH_ORDER:
-            continue
-
-        df = sheet_df.copy()
-
-        if df.empty:
-            continue
-
-        df.columns = [
-            normalize_column_name(c)
-            for c in df.columns
-        ]
-
-        # Add month from sheet
-        df["Month"] = sheet_name
-
-        # Numeric columns
-        numeric_columns = [
-            CONFIG["order_qty"],
-            CONFIG["invoice_qty"],
-            CONFIG["balance_qty"],
-            CONFIG["order_value"],
-            CONFIG["invoice_value"],
-            CONFIG["balance_value"],
-            CONFIG["amd_inventory"],
-            CONFIG["blr_inventory"],
-            CONFIG["nh_inventory"],
-        ]
-
-        for col in numeric_columns:
-
-            actual = resolve_column(
-                col,
-                df.columns,
+    for col in df.columns:
+        if _looks_like(col, DATE_COL_HINTS):
+            df[col] = pd.to_datetime(df[col], errors="coerce", dayfirst=True)
+        elif _looks_like(col, CURRENCY_COL_HINTS):
+            cleaned = (
+                df[col].astype(str)
+                .str.replace("₹", "", regex=False)
+                .str.replace(",", "", regex=False)
+                .str.strip()
             )
+            df[col] = pd.to_numeric(cleaned, errors="coerce")
+        elif _looks_like(col, PERCENT_COL_HINTS):
+            cleaned = df[col].astype(str).str.replace("%", "", regex=False).str.strip()
+            df[col] = pd.to_numeric(cleaned, errors="coerce")
+        elif _looks_like(col, QTY_COL_HINTS):
+            cleaned = df[col].astype(str).str.replace(",", "", regex=False).str.strip()
+            df[col] = pd.to_numeric(cleaned, errors="coerce")
 
-            if actual is not None:
-                df[actual] = clean_numeric(
-                    df[actual]
-                )
+    return df
 
-        # Dates
-        date_columns = [
-            CONFIG["order_date"],
-            CONFIG["invoice_date"],
-        ]
 
-        for col in date_columns:
+def _fill_rate(invoice_qty, order_qty):
+    order_qty = order_qty.replace(0, pd.NA)
+    return (pd.to_numeric(invoice_qty, errors="coerce") / pd.to_numeric(order_qty, errors="coerce") * 100).round(1)
 
-            actual = resolve_column(
-                col,
-                df.columns,
-            )
 
-            if actual is not None:
-
-                df[actual] = pd.to_datetime(
-                    df[actual],
-                    errors="coerce",
-                    dayfirst=True,
-                )
-
-        frames.append(df)
-
-    if not frames:
-        raise ValueError(
-            "No monthly sheets were found. "
-            "Expected sheets such as Apr, May, Jun, Jul, Aug."
-        )
-
-    combined = pd.concat(
-        frames,
-        ignore_index=True,
-    )
-
-    # Sort month correctly
-    combined["_month_sort"] = combined["Month"].apply(
-        month_sort_key
-    )
-
-    combined = combined.sort_values(
-        "_month_sort"
-    ).drop(
-        columns=["_month_sort"]
-    )
-
-    # --------------------------------------------------------
-    # DERIVED METRICS
-    # --------------------------------------------------------
-
-    order_qty = clean_numeric(
-        combined[CONFIG["order_qty"]]
-    )
-
-    invoice_qty = clean_numeric(
-        combined[CONFIG["invoice_qty"]]
-    )
-
-    balance_qty = clean_numeric(
-        combined[CONFIG["balance_qty"]]
-    )
-
-    order_value = clean_numeric(
-        combined[CONFIG["order_value"]]
-    )
-
-    invoice_value = clean_numeric(
-        combined[CONFIG["invoice_value"]]
-    )
-
-    balance_value = clean_numeric(
-        combined[CONFIG["balance_value"]]
-    )
-
-    combined["Fill Rate"] = np.where(
-        order_qty > 0,
-        invoice_qty / order_qty * 100,
-        np.nan,
-    )
-
-    combined["Value Fulfilment"] = np.where(
-        order_value > 0,
-        invoice_value / order_value * 100,
-        np.nan,
-    )
-
-    # Pending % based on quantity
-    combined["Pending %"] = np.where(
-        order_qty > 0,
-        balance_qty / order_qty * 100,
-        np.nan,
-    )
-
-    # Inventory total
-    combined["Total WH Inventory"] = (
-        clean_numeric(combined[CONFIG["amd_inventory"]]).fillna(0)
-        + clean_numeric(combined[CONFIG["blr_inventory"]]).fillna(0)
-        + clean_numeric(combined[CONFIG["nh_inventory"]]).fillna(0)
-    )
-
-    return combined
-
-
-# ============================================================
-# AGGREGATION
-# ============================================================
-
-def aggregate_metrics(df, group_columns):
-
-    result = (
-        df.groupby(
-            group_columns,
-            dropna=False,
-        )
-        .agg(
-            order_qty=(
-                CONFIG["order_qty"],
-                "sum",
-            ),
-
-            invoice_qty=(
-                CONFIG["invoice_qty"],
-                "sum",
-            ),
-
-            balance_qty=(
-                CONFIG["balance_qty"],
-                "sum",
-            ),
-
-            order_value=(
-                CONFIG["order_value"],
-                "sum",
-            ),
-
-            invoice_value=(
-                CONFIG["invoice_value"],
-                "sum",
-            ),
-
-            balance_value=(
-                CONFIG["balance_value"],
-                "sum",
-            ),
-
-            order_count=(
-                CONFIG["document_no"],
-                "nunique",
-            ),
-
-            invoice_count=(
-                CONFIG["invoice_no"],
-                lambda x: x.dropna().astype(str).nunique(),
-            ),
-
-            sku_count=(
-                CONFIG["sku"],
-                "nunique",
-            ),
-
-            customer_count=(
-                CONFIG["customer"],
-                "nunique",
-            ),
-
-        )
-        .reset_index()
-    )
-
-    result["fill_rate"] = np.where(
-        result["order_qty"] > 0,
-        result["invoice_qty"]
-        / result["order_qty"]
-        * 100,
-        np.nan,
-    )
-
-    result["value_fulfilment"] = np.where(
-        result["order_value"] > 0,
-        result["invoice_value"]
-        / result["order_value"]
-        * 100,
-        np.nan,
-    )
-
-    result["pending_pct"] = np.where(
-        result["order_qty"] > 0,
-        result["balance_qty"]
-        / result["order_qty"]
-        * 100,
-        np.nan,
-    )
-
-    return result
-
-
-# ============================================================
-# KPI CARD
-# ============================================================
-
-def show_kpi_row(df):
-
-    order_qty = df[CONFIG["order_qty"]].sum()
-    invoice_qty = df[CONFIG["invoice_qty"]].sum()
-    balance_qty = df[CONFIG["balance_qty"]].sum()
-
-    order_value = df[CONFIG["order_value"]].sum()
-    invoice_value = df[CONFIG["invoice_value"]].sum()
-    balance_value = df[CONFIG["balance_value"]].sum()
-
-    fill_rate = safe_pct(
-        invoice_qty,
-        order_qty,
-    )
-
-    value_fulfilment = safe_pct(
-        invoice_value,
-        order_value,
-    )
-
-    pending_pct = safe_pct(
-        balance_qty,
-        order_qty,
-    )
-
-    orders = df[CONFIG["document_no"]].nunique()
-
-    customers = df[CONFIG["customer"]].nunique()
-
-    skus = df[CONFIG["sku"]].nunique()
-
-    c1, c2, c3, c4 = st.columns(4)
-
-    c1.metric(
-        "Order Qty",
-        format_number(order_qty),
-    )
-
-    c2.metric(
-        "Invoice Qty",
-        format_number(invoice_qty),
-    )
-
-    c3.metric(
-        "Fill Rate",
-        format_percent(fill_rate),
-    )
-
-    c4.metric(
-        "Pending Qty",
-        format_number(balance_qty),
-    )
-
-    c5, c6, c7, c8 = st.columns(4)
-
-    c5.metric(
-        "Order Value",
-        format_value(order_value),
-    )
-
-    c6.metric(
-        "Invoice Value",
-        format_value(invoice_value),
-    )
-
-    c7.metric(
-        "Value Fulfilment",
-        format_percent(value_fulfilment),
-    )
-
-    c8.metric(
-        "Balance Value",
-        format_value(balance_value),
-    )
-
-    c9, c10, c11 = st.columns(3)
-
-    c9.metric(
-        "Orders",
-        format_number(orders),
-    )
-
-    c10.metric(
-        "Customers",
-        format_number(customers),
-    )
-
-    c11.metric(
-        "SKUs",
-        format_number(skus),
+def _center(container, text):
+    container.markdown(
+        f'<div style="text-align:center; white-space:nowrap;">{text}</div>',
+        unsafe_allow_html=True,
     )
 
 
-# ============================================================
-# MOM TREND DATA
-# ============================================================
+st.markdown(f"""
+<style>
+.stApp {{ background: {C_BG}; }}
+div[data-testid="stMetric"] {{
+    background:#fff; border-radius:14px; padding:14px 16px;
+    box-shadow:0 1px 3px rgba(0,0,0,.08);
+}}
+/* Compact, table-row-style buttons instead of big default pills.
+   Text is centered so shop names / header labels line up with the
+   center-aligned numeric cells below them. */
+div.stButton > button {{
+    width:100%;
+    text-align:center;
+    padding:0.3rem 0.75rem;
+    border-radius:6px;
+    border:1px solid #E4E7ED;
+    background:#fff;
+    font-weight:500;
+    font-size:0.9rem;
+    color:#1F2937;
+    box-shadow:none;
+}}
+div.stButton > button:hover {{
+    border-color:#4C6FFF;
+    color:#4C6FFF;
+}}
 
-def create_mom_summary(df):
+/* Bordered "grid" look for the main shop table — outer box border,
+   a divider line under every row, a divider between every column,
+   and vertical centering so multi-line shop names don't throw off
+   alignment. Scoped to the container's key-based class rather than
+   a raw unclosed <div>, since the latter isn't reliably nested by
+   newer Streamlit versions. */
+.st-key-fillrate_table {{
+    border:1px solid #E4E7ED;
+    border-radius:10px;
+    overflow:hidden;
+    background:#fff;
+}}
+.st-key-fillrate_table [data-testid="stHorizontalBlock"] {{
+    border-bottom:1px solid #E4E7ED;
+    padding:2px 6px;
+    align-items:center;
+}}
+.st-key-fillrate_table [data-testid="stHorizontalBlock"]:last-child {{
+    border-bottom:none;
+}}
+.st-key-fillrate_table [data-testid="stHorizontalBlock"] > [data-testid="column"]:not(:last-child),
+.st-key-fillrate_table [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:not(:last-child) {{
+    border-right:1px solid #E4E7ED;
+}}
+/* Header row (the first row inside the grid) — clickable sort
+   buttons, styled to look like a header rather than a data row. */
+.st-key-fillrate_table [data-testid="stHorizontalBlock"]:first-child {{
+    background:#F8F9FC;
+}}
+.st-key-fillrate_table [data-testid="stHorizontalBlock"]:first-child div.stButton > button {{
+    font-weight:700;
+    color:#1F2937;
+    background:transparent;
+    border:none;
+    box-shadow:none;
+}}
+.st-key-fillrate_table div.stButton > button {{
+    border:none;
+    border-radius:0;
+    box-shadow:none;
+    white-space:normal;
+}}
+</style>
+""", unsafe_allow_html=True)
 
-    grouped = aggregate_metrics(
-        df,
-        ["Month"],
-    )
+st.title("📶 Fill Rate")
+st.caption("Chain comparison, then a shop-by-shop breakdown — click a shop to see every order behind its numbers.")
 
-    grouped["_sort"] = grouped["Month"].apply(
-        month_sort_key
-    )
-
-    grouped = grouped.sort_values(
-        "_sort"
-    ).drop(
-        columns=["_sort"]
-    )
-
-    return grouped
-
-
-# ============================================================
-# MAIN
-# ============================================================
-
-st.title("📊 MOM Operations Dashboard")
-
-st.markdown(
-    """
-    <div class="dashboard-subtitle">
-        Month-on-Month Order, Invoice, Fill Rate, Balance,
-        Customer, SKU and Warehouse Performance
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
-
-
-# ============================================================
-# SHAREPOINT URL
-# ============================================================
-
-sharepoint_url = st.secrets.get(
-    CONFIG["sharepoint_secret"],
-    "",
-)
-
-if not sharepoint_url:
-
+sp_url = st.secrets.get("SHAREPOINT_EXCEL_URL", "")
+if not sp_url:
     st.error(
-        "SharePoint Excel URL is not configured."
+        "No SharePoint link configured. Add SHAREPOINT_EXCEL_URL to this app's "
+        "Secrets (the same link used by the other pages)."
     )
-
-    st.info(
-        "Add SHAREPOINT_EXCEL_URL to Streamlit Secrets."
-    )
-
     st.stop()
 
-
-# ============================================================
-# SIDEBAR
-# ============================================================
-
-with st.sidebar:
-
-    st.markdown("## 🎛 Dashboard Filters")
-
-    if st.button(
-        "🔄 Refresh Data",
-        use_container_width=True,
-    ):
-
-        load_workbook.clear()
-        prepare_data.clear()
-
+top_l, top_r = st.columns([5, 1])
+with top_r:
+    if st.button("🔄 Refresh Now", use_container_width=True):
+        load_data.clear()
         st.rerun()
 
-
-# ============================================================
-# LOAD DATA
-# ============================================================
-
 try:
-
-    df = prepare_data(
-        sharepoint_url
-    )
-
+    df = load_data(sp_url)
 except Exception as e:
-
-    st.error(
-        f"Unable to load the Excel workbook: {e}"
-    )
-
+    st.error(f"Could not load the live file: {e}")
     st.stop()
 
+# Reserved here so it renders above the chain chart, but it's filled
+# in further down once filters have been applied (so it always
+# reflects the current filtered view, same as the chart and table).
+total_metrics_slot = st.empty()
 
-# ============================================================
-# VALIDATE REQUIRED COLUMNS
-# ============================================================
-
-required_columns = [
-
-    CONFIG["chain"],
-    CONFIG["customer"],
-    CONFIG["document_no"],
-    CONFIG["sku"],
-
-    CONFIG["order_qty"],
-    CONFIG["invoice_qty"],
-    CONFIG["balance_qty"],
-
-    CONFIG["order_value"],
-    CONFIG["invoice_value"],
-    CONFIG["balance_value"],
-
-    CONFIG["invoice_no"],
-
+required_cols = [
+    CONFIG["chain_column"], CONFIG["shop_column"],
+    CONFIG["order_qty_column"], CONFIG["invoice_qty_column"],
 ]
-
-
-missing_columns = [
-    c
-    for c in required_columns
-    if resolve_column(c, df.columns) is None
-]
-
-
-if missing_columns:
-
+missing = [c for c in required_cols if c not in df.columns]
+if missing:
     st.error(
-        "Required columns are missing: "
-        + ", ".join(missing_columns)
+        f"Missing required column(s): {', '.join(missing)}. "
+        f"Available columns: {', '.join(df.columns)}. "
+        "Update CONFIG at the top of this file to match your sheet."
     )
-
     st.stop()
 
-
-# ============================================================
-# AVAILABLE MONTHS
-# ============================================================
-
-available_months = sorted(
-    df["Month"].dropna().unique(),
-    key=month_sort_key,
-)
-
-
-# ============================================================
-# SIDEBAR FILTERS
-# ============================================================
-
-with st.sidebar:
-
-    selected_months = st.multiselect(
-        "Month",
-        options=available_months,
-        default=available_months,
-    )
-
-    chain_options = sorted(
-        df[CONFIG["chain"]]
-        .dropna()
-        .astype(str)
-        .unique()
-    )
-
-    selected_chains = st.multiselect(
-        "Business Group",
-        options=chain_options,
-    )
-
-    customer_options = sorted(
-        df[CONFIG["customer"]]
-        .dropna()
-        .astype(str)
-        .unique()
-    )
-
-    selected_customers = st.multiselect(
-        "Customer",
-        options=customer_options,
-    )
-
-    location_options = sorted(
-        df[CONFIG["location"]]
-        .dropna()
-        .astype(str)
-        .unique()
-    )
-
-    selected_locations = st.multiselect(
-        "Location",
-        options=location_options,
-    )
-
-    status_options = sorted(
-        df[CONFIG["invoice_status"]]
-        .dropna()
-        .astype(str)
-        .unique()
-    )
-
-    selected_status = st.multiselect(
-        "Invoice Status",
-        options=status_options,
-    )
-
-    st.markdown("---")
-
-    st.caption(
-        f"Rows loaded: {len(df):,}"
-    )
-
-    st.caption(
-        f"Sheets detected: {', '.join(available_months)}"
-    )
-
-
-# ============================================================
-# APPLY FILTERS
-# ============================================================
-
-filtered = df.copy()
-
-
-if selected_months:
-
-    filtered = filtered[
-        filtered["Month"].isin(
-            selected_months
-        )
-    ]
-
-
-if selected_chains:
-
-    filtered = filtered[
-        filtered[CONFIG["chain"]]
-        .astype(str)
-        .isin(selected_chains)
-    ]
-
-
-if selected_customers:
-
-    filtered = filtered[
-        filtered[CONFIG["customer"]]
-        .astype(str)
-        .isin(selected_customers)
-    ]
-
-
-if selected_locations:
-
-    filtered = filtered[
-        filtered[CONFIG["location"]]
-        .astype(str)
-        .isin(selected_locations)
-    ]
-
-
-if selected_status:
-
-    filtered = filtered[
-        filtered[CONFIG["invoice_status"]]
-        .astype(str)
-        .isin(selected_status)
-    ]
-
-
-if filtered.empty:
-
-    st.warning(
-        "No data matches the selected filters."
-    )
-
-    st.stop()
-
-
-# ============================================================
-# HEADER INFO
-# ============================================================
-
-st.caption(
-    f"Showing {len(filtered):,} rows "
-    f"from {filtered['Month'].nunique()} month(s)"
-)
-
-
-# ============================================================
-# KPI
-# ============================================================
-
-st.markdown(
-    '<div class="section-title">Executive Overview</div>',
-    unsafe_allow_html=True,
-)
-
-show_kpi_row(filtered)
-
-
-# ============================================================
-# MOM TAB
-# ============================================================
-
-tab1, tab2, tab3, tab4, tab5 = st.tabs(
-    [
-        "📈 MOM Overview",
-        "🏢 Business Group",
-        "🏪 Customer",
-        "📦 SKU / Product",
-        "🔎 Detailed Orders",
-    ]
-)
-
-
-# ============================================================
-# TAB 1 — MOM
-# ============================================================
-
-with tab1:
-
-    st.markdown(
-        '<div class="section-title">Month-on-Month Trend</div>',
-        unsafe_allow_html=True,
-    )
-
-    mom = create_mom_summary(
-        filtered
-    )
-
-    # --------------------------------------------
-    # MOM TABLE
-    # --------------------------------------------
-
-    display_mom = mom.copy()
-
-    display_mom["Order Qty"] = display_mom[
-        "order_qty"
-    ].map(lambda x: f"{x:,.0f}")
-
-    display_mom["Invoice Qty"] = display_mom[
-        "invoice_qty"
-    ].map(lambda x: f"{x:,.0f}")
-
-    display_mom["Balance Qty"] = display_mom[
-        "balance_qty"
-    ].map(lambda x: f"{x:,.0f}")
-
-    display_mom["Fill Rate"] = display_mom[
-        "fill_rate"
-    ].map(lambda x: f"{x:.1f}%")
-
-    display_mom["Order Value"] = display_mom[
-        "order_value"
-    ].map(format_value)
-
-    display_mom["Invoice Value"] = display_mom[
-        "invoice_value"
-    ].map(format_value)
-
-    display_mom["Balance Value"] = display_mom[
-        "balance_value"
-    ].map(format_value)
-
-    display_mom["Value Fulfilment"] = display_mom[
-        "value_fulfilment"
-    ].map(lambda x: f"{x:.1f}%")
-
-    display_mom = display_mom[
-        [
-            "Month",
-            "Order Qty",
-            "Invoice Qty",
-            "Fill Rate",
-            "Balance Qty",
-            "Order Value",
-            "Invoice Value",
-            "Value Fulfilment",
-            "Balance Value",
-            "order_count",
-            "customer_count",
-            "sku_count",
-        ]
-    ].rename(
-        columns={
-            "order_count": "Orders",
-            "customer_count": "Customers",
-            "sku_count": "SKUs",
-        }
-    )
-
-    st.dataframe(
-        display_mom,
-        use_container_width=True,
-        hide_index=True,
-    )
-
-
-    # --------------------------------------------
-    # FILL RATE TREND
-    # --------------------------------------------
-
-    st.markdown(
-        '<div class="section-title">Fill Rate Trend</div>',
-        unsafe_allow_html=True,
-    )
-
-    chart_fill = mom[
-        [
-            "Month",
-            "fill_rate",
-        ]
-    ].copy()
-
-    fill_chart = (
-        alt.Chart(chart_fill)
-        .mark_line(
-            point=alt.OverlayMarkDef(
-                filled=True,
-                size=80,
-            ),
-            strokeWidth=3,
-        )
-        .encode(
-            x=alt.X(
-                "Month:N",
-                sort=available_months,
-                title="Month",
-            ),
-            y=alt.Y(
-                "fill_rate:Q",
-                title="Fill Rate (%)",
-                scale=alt.Scale(
-                    zero=False
-                ),
-            ),
-            tooltip=[
-                alt.Tooltip(
-                    "Month:N",
-                    title="Month",
-                ),
-                alt.Tooltip(
-                    "fill_rate:Q",
-                    title="Fill Rate",
-                    format=".1f",
-                ),
-            ],
-        )
-        .properties(
-            height=350
-        )
-    )
-
-    st.altair_chart(
-        fill_chart,
-        use_container_width=True,
-    )
-
-
-    # --------------------------------------------
-    # VALUE TREND
-    # --------------------------------------------
-
-    st.markdown(
-        '<div class="section-title">Order vs Invoice Value</div>',
-        unsafe_allow_html=True,
-    )
-
-    value_chart_data = mom[
-        [
-            "Month",
-            "order_value",
-            "invoice_value",
-        ]
-    ].copy()
-
-    value_long = value_chart_data.melt(
-        id_vars=["Month"],
-        value_vars=[
-            "order_value",
-            "invoice_value",
-        ],
-        var_name="Metric",
-        value_name="Value",
-    )
-
-    value_long["Metric"] = value_long[
-        "Metric"
-    ].replace(
-        {
-            "order_value": "Order Value",
-            "invoice_value": "Invoice Value",
-        }
-    )
-
-    value_chart = (
-        alt.Chart(value_long)
-        .mark_line(
-            point=True,
-            strokeWidth=3,
-        )
-        .encode(
-            x=alt.X(
-                "Month:N",
-                sort=available_months,
-                title="Month",
-            ),
-            y=alt.Y(
-                "Value:Q",
-                title="Value",
-            ),
-            color=alt.Color(
-                "Metric:N",
-                title="Metric",
-            ),
-            tooltip=[
-                "Month:N",
-                "Metric:N",
-                alt.Tooltip(
-                    "Value:Q",
-                    format=",.0f",
-                ),
-            ],
-        )
-        .properties(
-            height=350
-        )
-    )
-
-    st.altair_chart(
-        value_chart,
-        use_container_width=True,
-    )
-
-
-# ============================================================
-# TAB 2 — BUSINESS GROUP
-# ============================================================
-
-with tab2:
-
-    st.markdown(
-        '<div class="section-title">Business Group Analysis</div>',
-        unsafe_allow_html=True,
-    )
-
-    chain_month = aggregate_metrics(
-        filtered,
-        [
-            "Month",
-            CONFIG["chain"],
-        ],
-    )
-
-    chain_month["_sort"] = chain_month[
-        "Month"
-    ].apply(month_sort_key)
-
-    chain_month = chain_month.sort_values(
-        "_sort"
-    ).drop(
-        columns="_sort"
-    )
-
-
-    # --------------------------------------------
-    # CHAIN FILL RATE
-    # --------------------------------------------
-
-    st.markdown("#### Fill Rate by Business Group")
-
-    chain_fill_chart = (
-        alt.Chart(chain_month)
-        .mark_line(
-            point=True,
-            strokeWidth=2.5,
-        )
-        .encode(
-            x=alt.X(
-                "Month:N",
-                sort=available_months,
-                title="Month",
-            ),
-            y=alt.Y(
-                "fill_rate:Q",
-                title="Fill Rate %",
-                scale=alt.Scale(
-                    zero=False
-                ),
-            ),
-            color=alt.Color(
-                f"{CONFIG['chain']}:N",
-                title="Business Group",
-            ),
-            tooltip=[
-                "Month:N",
-                f"{CONFIG['chain']}:N",
-                alt.Tooltip(
-                    "fill_rate:Q",
-                    title="Fill Rate",
-                    format=".1f",
-                ),
-                alt.Tooltip(
-                    "order_qty:Q",
-                    title="Order Qty",
-                    format=",.0f",
-                ),
-                alt.Tooltip(
-                    "invoice_qty:Q",
-                    title="Invoice Qty",
-                    format=",.0f",
-                ),
-            ],
-        )
-        .properties(
-            height=450
-        )
-    )
-
-    st.altair_chart(
-        chain_fill_chart,
-        use_container_width=True,
-    )
-
-
-    # --------------------------------------------
-    # CHAIN SUMMARY
-    # --------------------------------------------
-
-    latest_month = available_months[-1]
-
-    latest_chain = chain_month[
-        chain_month["Month"]
-        == latest_month
-    ].copy()
-
-    latest_chain = latest_chain.sort_values(
-        "fill_rate"
-    )
-
-    latest_chain_display = latest_chain[
-        [
-            CONFIG["chain"],
-            "order_qty",
-            "invoice_qty",
-            "fill_rate",
-            "balance_qty",
-            "order_value",
-            "invoice_value",
-            "balance_value",
-        ]
-    ].copy()
-
-    latest_chain_display["order_qty"] = latest_chain_display[
-        "order_qty"
-    ].map(lambda x: f"{x:,.0f}")
-
-    latest_chain_display["invoice_qty"] = latest_chain_display[
-        "invoice_qty"
-    ].map(lambda x: f"{x:,.0f}")
-
-    latest_chain_display["fill_rate"] = latest_chain_display[
-        "fill_rate"
-    ].map(lambda x: f"{x:.1f}%")
-
-    latest_chain_display["balance_qty"] = latest_chain_display[
-        "balance_qty"
-    ].map(lambda x: f"{x:,.0f}")
-
-    latest_chain_display["order_value"] = latest_chain_display[
-        "order_value"
-    ].map(format_value)
-
-    latest_chain_display["invoice_value"] = latest_chain_display[
-        "invoice_value"
-    ].map(format_value)
-
-    latest_chain_display["balance_value"] = latest_chain_display[
-        "balance_value"
-    ].map(format_value)
-
-    latest_chain_display.columns = [
-        "Business Group",
-        "Order Qty",
-        "Invoice Qty",
-        "Fill Rate",
-        "Balance Qty",
-        "Order Value",
-        "Invoice Value",
-        "Balance Value",
-    ]
-
-    st.markdown(
-        f"#### {latest_month} Business Group Detail"
-    )
-
-    st.dataframe(
-        latest_chain_display,
-        use_container_width=True,
-        hide_index=True,
-    )
-
-
-# ============================================================
-# TAB 3 — CUSTOMER
-# ============================================================
-
-with tab3:
-
-    st.markdown(
-        '<div class="section-title">Customer Analysis</div>',
-        unsafe_allow_html=True,
-    )
-
-    customer_summary = aggregate_metrics(
-        filtered,
-        [
-            CONFIG["customer"],
-        ],
-    )
-
-    customer_summary = customer_summary.sort_values(
-        "fill_rate",
-        ascending=True,
-    )
-
-
-    # Search
-    customer_search = st.text_input(
-        "🔍 Search Customer",
-        key="customer_search",
-    )
-
-    if customer_search:
-
-        customer_summary = customer_summary[
-            customer_summary[
-                CONFIG["customer"]
-            ]
-            .astype(str)
-            .str.contains(
-                customer_search,
-                case=False,
-                na=False,
-            )
-        ]
-
-
-    st.caption(
-        f"{len(customer_summary):,} customers"
-    )
-
-
-    # --------------------------------------------
-    # CUSTOMER TABLE
-    # --------------------------------------------
-
-    customer_display = customer_summary[
-        [
-            CONFIG["customer"],
-            "order_count",
-            "order_qty",
-            "invoice_qty",
-            "fill_rate",
-            "balance_qty",
-            "order_value",
-            "invoice_value",
-            "balance_value",
-        ]
-    ].copy()
-
-    customer_display.columns = [
-        "Customer",
-        "Orders",
-        "Order Qty",
-        "Invoice Qty",
-        "Fill Rate",
-        "Balance Qty",
-        "Order Value",
-        "Invoice Value",
-        "Balance Value",
-    ]
-
-    st.dataframe(
-        customer_display,
-        use_container_width=True,
-        hide_index=True,
-        column_config={
-            "Order Qty": st.column_config.NumberColumn(
-                format="%,.0f"
-            ),
-            "Invoice Qty": st.column_config.NumberColumn(
-                format="%,.0f"
-            ),
-            "Balance Qty": st.column_config.NumberColumn(
-                format="%,.0f"
-            ),
-            "Fill Rate": st.column_config.NumberColumn(
-                format="%.1f"
-            ),
-            "Order Value": st.column_config.NumberColumn(
-                format="₹ %,.0f"
-            ),
-            "Invoice Value": st.column_config.NumberColumn(
-                format="₹ %,.0f"
-            ),
-            "Balance Value": st.column_config.NumberColumn(
-                format="₹ %,.0f"
-            ),
-        },
-    )
-
-
-# ============================================================
-# TAB 4 — SKU / PRODUCT
-# ============================================================
-
-with tab4:
-
-    st.markdown(
-        '<div class="section-title">SKU / Product Analysis</div>',
-        unsafe_allow_html=True,
-    )
-
-    sku_summary = aggregate_metrics(
-        filtered,
-        [
-            CONFIG["sku"],
-            CONFIG["description"],
-        ],
-    )
-
-    sku_summary = sku_summary.sort_values(
-        "balance_qty",
-        ascending=False,
-    )
-
-
-    sku_search = st.text_input(
-        "🔍 Search SKU / Product",
-        key="sku_search",
-    )
-
-
-    if sku_search:
-
-        mask = (
-            sku_summary[
-                CONFIG["sku"]
-            ]
-            .astype(str)
-            .str.contains(
-                sku_search,
-                case=False,
-                na=False,
-            )
-            |
-            sku_summary[
-                CONFIG["description"]
-            ]
-            .astype(str)
-            .str.contains(
-                sku_search,
-                case=False,
-                na=False,
-            )
-        )
-
-        sku_summary = sku_summary[
-            mask
-        ]
-
-
-    st.caption(
-        f"{len(sku_summary):,} SKUs"
-    )
-
-
-    sku_display = sku_summary[
-        [
-            CONFIG["sku"],
-            CONFIG["description"],
-            "order_qty",
-            "invoice_qty",
-            "fill_rate",
-            "balance_qty",
-            "order_value",
-            "invoice_value",
-            "balance_value",
-        ]
-    ].copy()
-
-    sku_display.columns = [
-        "SKU",
-        "Description",
-        "Order Qty",
-        "Invoice Qty",
-        "Fill Rate",
-        "Balance Qty",
-        "Order Value",
-        "Invoice Value",
-        "Balance Value",
-    ]
-
-    st.dataframe(
-        sku_display,
-        use_container_width=True,
-        hide_index=True,
-    )
-
-
-# ============================================================
-# TAB 5 — DETAILED ORDERS
-# ============================================================
-
-with tab5:
-
-    st.markdown(
-        '<div class="section-title">Detailed Order / SKU View</div>',
-        unsafe_allow_html=True,
-    )
-
-    st.caption(
-        "This view retains the operational-level detail from the monthly sheets."
-    )
-
-
-    # --------------------------------------------
-    # SEARCH
-    # --------------------------------------------
-
-    detail_search = st.text_input(
-        "🔍 Search Document No. / Customer / SKU / Description / Invoice No.",
-        key="detail_search",
-    )
-
-
-    detail_df = filtered.copy()
-
-
-    if detail_search:
-
-        search = str(
-            detail_search
-        ).lower()
-
-        searchable_columns = [
-            CONFIG["document_no"],
-            CONFIG["customer"],
-            CONFIG["sku"],
-            CONFIG["description"],
-            CONFIG["invoice_no"],
-            CONFIG["order_key"],
-        ]
-
-        mask = pd.Series(
-            False,
-            index=detail_df.index,
-        )
-
-        for col in searchable_columns:
-
-            if col in detail_df.columns:
-
-                mask = mask | (
-                    detail_df[col]
-                    .astype(str)
-                    .str.lower()
-                    .str.contains(
-                        search,
-                        na=False,
-                    )
-                )
-
-        detail_df = detail_df[
-            mask
-        ]
-
-
-    st.caption(
-        f"{len(detail_df):,} detail rows"
-    )
-
-
-    # --------------------------------------------
-    # SELECT COLUMNS
-    # --------------------------------------------
-
-    detail_columns = [
-
-        "Month",
-
-        CONFIG["order_key"],
-        CONFIG["order_date"],
-        CONFIG["location"],
-        CONFIG["document_no"],
-
-        CONFIG["chain"],
-        CONFIG["customer"],
-        CONFIG["customer_no"],
-
-        CONFIG["sku"],
-        CONFIG["gtin"],
-        CONFIG["description"],
-
-        CONFIG["order_qty"],
-        CONFIG["order_value"],
-
-        CONFIG["invoice_qty"],
-        CONFIG["invoice_value"],
-
-        CONFIG["invoice_no"],
-        CONFIG["invoice_status"],
-
-        CONFIG["balance_qty"],
-        CONFIG["balance_value"],
-
-        CONFIG["invoice_date"],
-
-        CONFIG["amd_inventory"],
-        CONFIG["blr_inventory"],
-        CONFIG["nh_inventory"],
-
-        "Fill Rate",
-        "Value Fulfilment",
-        "Pending %",
-        "Total WH Inventory",
-    ]
-
-
-    available_detail_columns = [
-        c
-        for c in detail_columns
-        if c in detail_df.columns
-    ]
-
-
-    detail_display = detail_df[
-        available_detail_columns
-    ].copy()
-
-
-    # Format dates
-    for col in [
-        CONFIG["order_date"],
-        CONFIG["invoice_date"],
-    ]:
-
-        if col in detail_display.columns:
-
-            detail_display[col] = (
-                pd.to_datetime(
-                    detail_display[col],
-                    errors="coerce",
-                )
-                .dt.strftime(
-                    "%d-%m-%Y"
-                )
-            )
-
-
-    # Download
-    csv_data = detail_display.to_csv(
-        index=False
-    ).encode(
-        "utf-8-sig"
-    )
-
-
-    st.download_button(
-        "⬇️ Download Filtered Details",
-        data=csv_data,
-        file_name="MOM_Filtered_Details.csv",
-        mime="text/csv",
-        use_container_width=False,
-    )
-
-
-    st.dataframe(
-        detail_display,
-        use_container_width=True,
-        hide_index=True,
-        height=650,
-    )
-
-
-# ============================================================
-# FOOTER
-# ============================================================
+has_sale_loss = CONFIG["sale_loss_column"] in df.columns
+has_order_id = CONFIG["order_id_column"] in df.columns
+has_invoice_no = CONFIG["invoice_number_column"] in df.columns
+has_tat = CONFIG["tat_column"] in df.columns
+
+chain_col = CONFIG["chain_column"]
+shop_col = CONFIG["shop_column"]
+oid_col = CONFIG["order_id_column"]
+inv_col = CONFIG["invoice_number_column"]
+oqty_col = CONFIG["order_qty_column"]
+iqty_col = CONFIG["invoice_qty_column"]
+sloss_col = CONFIG["sale_loss_column"]
+tat_col = CONFIG["tat_column"]
+standard_tat_col = CONFIG["standard_tat_column"]
+
+# ------------------------------------------------------------
+# CHAIN FILL RATE — bar chart (drawn later, after Filters below,
+# but the placeholder is reserved here so it appears first).
+# ------------------------------------------------------------
+st.markdown("### Fill Rate by Chain")
+chart_slot = st.empty()
 
 st.markdown("---")
 
-st.markdown(
-    f"""
-    <div class="small-muted">
-        Data source: SharePoint Excel &nbsp;|&nbsp;
-        Monthly sheets detected: {", ".join(available_months)}
-        &nbsp;|&nbsp;
-        Last application load: {datetime.now().strftime("%d-%m-%Y %H:%M")}
-    </div>
-    """,
-    unsafe_allow_html=True,
+# ------------------------------------------------------------
+# FILTERS — Name (chain), InvoiceNumber, Order Id, Final Remarks.
+# Sits below the chart, above the table, and drives both.
+# ------------------------------------------------------------
+with st.expander("Filters", expanded=False):
+    fcols = st.columns(3)
+    active_filters = {}
+    filter_cols_present = [c for c in FILTER_COLUMNS if c in df.columns]
+    for i, col in enumerate(filter_cols_present):
+        with fcols[i % 3]:
+            options = sorted(df[col].dropna().astype(str).unique().tolist())
+            picked = st.multiselect(col, options, key=f"fillrate_filter_{col}")
+            if picked:
+                active_filters[col] = picked
+
+filtered = df.copy()
+for col, vals in active_filters.items():
+    filtered = filtered[filtered[col].astype(str).isin(vals)]
+
+if filtered.empty:
+    st.warning("No rows match the current filters.")
+    st.stop()
+
+# ------------------------------------------------------------
+# OVERALL TOTAL FILL RATE — sum of every Order Qty / sum of every
+# Invoice Qty across the (filtered) data, not an average of each
+# shop's or chain's individual fill rate. Rendered into the slot
+# reserved right after the page caption, so it sits above everything
+# else and always reflects whatever filters are active.
+# ------------------------------------------------------------
+total_order_qty = pd.to_numeric(filtered[oqty_col], errors="coerce").sum()
+total_invoice_qty = pd.to_numeric(filtered[iqty_col], errors="coerce").sum()
+overall_fill_rate = (total_invoice_qty / total_order_qty * 100) if total_order_qty else None
+
+with total_metrics_slot.container():
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Total Order Qty", f"{total_order_qty:,.0f}")
+    m2.metric("Total Invoice Qty", f"{total_invoice_qty:,.0f}")
+    m3.metric(
+        "Overall Fill Rate",
+        "—" if overall_fill_rate is None else f"{overall_fill_rate:.1f}%",
+    )
+
+# Now that filters are known, build and draw the chart into the slot
+# reserved above the Filters section.
+chain_agg = (
+    filtered.groupby(chain_col, dropna=False)
+    .agg(order_qty=(oqty_col, "sum"), invoice_qty=(iqty_col, "sum"))
+    .reset_index()
 )
+chain_agg["fill_rate"] = _fill_rate(chain_agg["invoice_qty"], chain_agg["order_qty"])
+chain_agg = chain_agg.sort_values("fill_rate", ascending=DEFAULT_SORT_ASC)
+
+bars = alt.Chart(chain_agg).mark_bar(color="#4C6FFF", cornerRadiusTopLeft=4, cornerRadiusTopRight=4).encode(
+    x=alt.X(
+        f"{chain_col}:N", sort=None, title="Chain",
+        axis=alt.Axis(labelAngle=-40, labelAlign="right", labelPadding=6),
+    ),
+    y=alt.Y("fill_rate:Q", title="Fill Rate (%)"),
+    tooltip=[
+        alt.Tooltip(f"{chain_col}:N", title="Chain"),
+        alt.Tooltip("order_qty:Q", title="Order Qty", format=",.0f"),
+        alt.Tooltip("invoice_qty:Q", title="Invoice Qty", format=",.0f"),
+        alt.Tooltip("fill_rate:Q", title="Fill Rate %", format=".1f"),
+    ],
+).properties(height=380)
+
+labels = bars.mark_text(dy=-8, color="#1F2937").encode(text=alt.Text("fill_rate:Q", format=".1f"))
+
+chart_slot.altair_chart(bars + labels, use_container_width=True)
+
+# ------------------------------------------------------------
+# SHOP SUMMARY TABLE
+# ------------------------------------------------------------
+st.markdown("### Shops")
+
+agg_kwargs = {"order_qty": (oqty_col, "sum"), "invoice_qty": (iqty_col, "sum")}
+if has_order_id:
+    agg_kwargs["order_count"] = (oid_col, "nunique")
+if has_invoice_no:
+    agg_kwargs["invoice_count"] = (inv_col, "nunique")
+if has_sale_loss:
+    agg_kwargs["sale_loss"] = (sloss_col, "sum")
+if has_tat:
+    agg_kwargs["tat_avg"] = (tat_col, "mean")
+
+shop_agg = filtered.groupby(shop_col, dropna=False).agg(**agg_kwargs).reset_index()
+shop_agg["fill_rate"] = _fill_rate(shop_agg["invoice_qty"], shop_agg["order_qty"])
+
+# Columns to show — same pattern as the Order Tracking page's picker,
+# scoped to this table's fixed set of metric columns (shop name is
+# always shown, since it's the clickable row key).
+metric_options = ["Order Qty", "Invoice Qty", "Fill Rate"]
+if has_order_id:
+    metric_options.insert(0, "Order (count)")
+if has_invoice_no:
+    metric_options.insert(1 if has_order_id else 0, "Invoice (count)")
+if has_sale_loss:
+    metric_options.append("Sale Loss (In Lacs)")
+if has_tat:
+    metric_options.append("TAT (avg)")
+
+with st.expander("Columns to show", expanded=False):
+    visible_metrics = st.multiselect(
+        "Columns to show", metric_options, default=metric_options,
+        key="fillrate_visible_cols", label_visibility="collapsed",
+    )
+if not visible_metrics:
+    visible_metrics = metric_options
+
+# Maps each display label to the underlying shop_agg column used for
+# both sorting and rendering.
+SORT_KEY_MAP = {
+    "Order (count)": "order_count",
+    "Invoice (count)": "invoice_count",
+    "Order Qty": "order_qty",
+    "Invoice Qty": "invoice_qty",
+    "Fill Rate": "fill_rate",
+    "Sale Loss (In Lacs)": "sale_loss",
+    "TAT (avg)": "tat_avg",
+}
+
+shop_search = st.text_input("🔍 Search shop name", key="fillrate_shop_search")
+shop_view = shop_agg
+if shop_search:
+    shop_view = shop_view[shop_view[shop_col].astype(str).str.contains(shop_search, case=False, na=False)]
+
+st.caption(f"{len(shop_view):,} of {len(shop_agg):,} shops")
+
+
+def _clear_selected_shop():
+    st.session_state["fillrate_selected_shop"] = None
+
+
+@st.dialog("Shop Order Details", width="large", on_dismiss=_clear_selected_shop)
+def show_shop_details(shop_name):
+    rows = filtered[filtered[shop_col].astype(str) == str(shop_name)].copy()
+    if rows.empty:
+        st.warning("No matching order rows found.")
+        return
+    rows["Fill Rate"] = _fill_rate(rows[iqty_col], rows[oqty_col])
+
+    # Standard TAT sits right after Actual Deli. Days; TAT itself
+    # stays at the very end of the row. Whatever header these columns
+    # have in the source sheet is what will display, since we don't
+    # relabel them below.
+    pref_cols = [
+        CONFIG["wh_receiving_date_column"], shop_col,
+        CONFIG["db_code_column"], CONFIG["category_column"], oid_col,
+        CONFIG["invoice_date_column"], inv_col, oqty_col, iqty_col,
+        "Fill Rate", sloss_col, CONFIG["delivery_date_column"],
+        CONFIG["actual_delivery_days_column"], standard_tat_col,
+        CONFIG["variance_column"], tat_col,
+    ]
+    # Resolve each configured name to whatever the sheet actually calls
+    # it (case/whitespace-tolerant) so a small header mismatch doesn't
+    # silently drop the column — and never add the same sheet column
+    # twice under two different labels.
+    resolved = {}
+    cols_present = []
+    seen_actual = set()
+    for c in pref_cols:
+        if c == "Fill Rate":
+            cols_present.append(c)
+            continue
+        actual = _resolve_col(c, rows.columns)
+        if actual is not None:
+            resolved[c] = actual
+            if actual not in seen_actual:
+                cols_present.append(actual)
+                seen_actual.add(actual)
+
+    missing_msgs = []
+    if standard_tat_col not in resolved:
+        missing_msgs.append(f"Couldn't find a '{standard_tat_col}' column in the sheet.")
+    elif resolved.get(standard_tat_col) == resolved.get(tat_col):
+        missing_msgs.append(
+            f"'{standard_tat_col}' and '{tat_col}' both matched the same "
+            f"sheet column ('{resolved.get(tat_col)}') — the sheet likely "
+            f"doesn't have a separate Standard TAT header yet."
+        )
+    if missing_msgs:
+        st.caption("⚠️ " + " ".join(missing_msgs))
+        with st.expander("Debug: exact column headers in this sheet"):
+            st.write(list(rows.columns))
+
+    st.caption(f"{len(rows):,} order rows for **{shop_name}**")
+
+    wh_date_actual = resolved.get(CONFIG["wh_receiving_date_column"])
+    sort_col = wh_date_actual if wh_date_actual else cols_present[0]
+    display = rows[cols_present].sort_values(by=sort_col, ascending=False)
+
+    resolved_sloss = resolved.get(sloss_col)
+    resolved_tat = resolved.get(tat_col)
+    resolved_std_tat = resolved.get(standard_tat_col)
+
+    column_config = {}
+    for c in cols_present:
+        if c == "Fill Rate":
+            column_config[c] = st.column_config.NumberColumn(c, format="%.1f%%")
+        elif c == resolved_sloss:
+            column_config[c] = st.column_config.NumberColumn("Sale Loss (In Lacs)", format="₹ %.2f")
+        elif c in (resolved_tat, resolved_std_tat):
+            column_config[c] = st.column_config.NumberColumn(format="%.0f")
+        elif _looks_like(c, DATE_COL_HINTS):
+            column_config[c] = st.column_config.DateColumn(c, format="DD-MM-YYYY")
+        elif _looks_like(c, CURRENCY_COL_HINTS):
+            column_config[c] = st.column_config.NumberColumn(c, format="₹ %.2f")
+
+    st.dataframe(display, use_container_width=True, hide_index=True, height=460, column_config=column_config)
+
+
+# ------------------------------------------------------------
+# SORT — click a column header itself to sort by it (no separate
+# selectbox anymore). Each header cycles through 3 states on
+# repeated clicks, in this order: Ascending -> Descending -> Normal
+# (back to the default, unsorted view).
+# ------------------------------------------------------------
+if "fillrate_sort_col" not in st.session_state:
+    st.session_state["fillrate_sort_col"] = None       # "__shop__" or a SORT_KEY_MAP value
+    st.session_state["fillrate_sort_dir"] = None        # "asc" | "desc" | None
+
+if "fillrate_selected_shop" not in st.session_state:
+    st.session_state["fillrate_selected_shop"] = None
+
+
+def _cycle_sort(col_key: str):
+    cur_col = st.session_state["fillrate_sort_col"]
+    cur_dir = st.session_state["fillrate_sort_dir"]
+    if cur_col != col_key:
+        st.session_state["fillrate_sort_col"] = col_key
+        st.session_state["fillrate_sort_dir"] = "asc"
+    elif cur_dir == "asc":
+        st.session_state["fillrate_sort_dir"] = "desc"
+    else:  # was "desc" -> third click resets to Normal
+        st.session_state["fillrate_sort_col"] = None
+        st.session_state["fillrate_sort_dir"] = None
+
+
+def _arrow_for(col_key: str) -> str:
+    if st.session_state["fillrate_sort_col"] != col_key:
+        return ""
+    return " ▲" if st.session_state["fillrate_sort_dir"] == "asc" else " ▼"
+
+
+header_widths = [3] + [1] * len(visible_metrics)
+
+# A real Streamlit container (not a raw unclosed <div>) so everything
+# inside is a genuine DOM descendant that our .st-key-fillrate_table
+# CSS can reliably target, regardless of Streamlit version.
+with st.container(key="fillrate_table"):
+    header_cols = st.columns(header_widths)
+    if header_cols[0].button(f"{shop_col}{_arrow_for('__shop__')}", key="fillrate_header___shop__", use_container_width=True):
+        _cycle_sort("__shop__")
+    for hc, label in zip(header_cols[1:], visible_metrics):
+        key = SORT_KEY_MAP[label]
+        if hc.button(f"{label}{_arrow_for(key)}", key=f"fillrate_header_{key}", use_container_width=True):
+            _cycle_sort(key)
+
+    # Apply whatever sort state the header click above (or a prior
+    # run) left us with. "Normal" (col=None) leaves shop_view in its
+    # default groupby order.
+    active_col = st.session_state["fillrate_sort_col"]
+    active_dir = st.session_state["fillrate_sort_dir"]
+    if active_col:
+        sort_col = shop_col if active_col == "__shop__" else active_col
+        shop_view = shop_view.sort_values(sort_col, ascending=(active_dir == "asc"), na_position="last")
+
+    for row_idx, row in shop_view.reset_index(drop=True).iterrows():
+        row_cols = st.columns(header_widths)
+        if row_cols[0].button(str(row[shop_col]), key=f"shop_btn_{row_idx}_{row[shop_col]}", use_container_width=True):
+            # Don't call the @st.dialog function directly from inside this
+            # per-row loop — with many buttons on the page, Streamlit can
+            # end up registering the dialog element twice in one run
+            # (StreamlitDuplicateElementId). Instead, just record which
+            # shop was clicked and open the dialog once, below, outside
+            # the loop.
+            st.session_state["fillrate_selected_shop"] = row[shop_col]
+            st.rerun()
+        for rc, label in zip(row_cols[1:], visible_metrics):
+            if label == "Order (count)":
+                _center(rc, f"{int(row['order_count']):,}")
+            elif label == "Invoice (count)":
+                _center(rc, f"{int(row['invoice_count']):,}")
+            elif label == "Order Qty":
+                _center(rc, f"{row['order_qty']:,.0f}")
+            elif label == "Invoice Qty":
+                _center(rc, f"{row['invoice_qty']:,.0f}")
+            elif label == "Fill Rate":
+                val = row["fill_rate"]
+                _center(rc, "—" if pd.isna(val) else f"{val:.1f}%")
+            elif label == "Sale Loss (In Lacs)":
+                val = row.get("sale_loss")
+                _center(rc, "—" if val is None or pd.isna(val) else f"₹ {val:,.2f}")
+            elif label == "TAT (avg)":
+                val = row.get("tat_avg")
+                _center(rc, "—" if val is None or pd.isna(val) else f"{val:.1f}")
+
+# Open the dialog exactly once per run, from this single call site —
+# never from inside the row loop above.
+if st.session_state.get("fillrate_selected_shop"):
+    show_shop_details(st.session_state["fillrate_selected_shop"])
