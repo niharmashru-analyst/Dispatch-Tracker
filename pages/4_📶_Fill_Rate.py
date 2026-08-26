@@ -517,9 +517,9 @@ with st.container(key="fillrate_table"):
         if row_cols[0].button(str(row[shop_col]), key=f"shop_btn_{row_idx}_{row[shop_col]}", use_container_width=True):
             show_shop_details(row[shop_col])
         for rc, label in zip(row_cols[1:], visible_metrics):
-            if label == "Order Id (count)":
+            if label == "Order (count)":
                 _right(rc, f"{int(row['order_count']):,}")
-            elif label == "InvoiceNumber (count)":
+            elif label == "Invoice (count)":
                 _right(rc, f"{int(row['invoice_count']):,}")
             elif label == "Order Qty":
                 _right(rc, f"{row['order_qty']:,.0f}")
