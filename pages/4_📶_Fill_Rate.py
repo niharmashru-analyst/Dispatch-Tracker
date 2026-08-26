@@ -1805,7 +1805,7 @@ previous = (
 # DELTA FUNCTIONS
 # ============================================================
 
-def number_delta(
+def currency_delta(
     current_value,
     previous_value,
 ):
@@ -1818,10 +1818,7 @@ def number_delta(
         - previous_value
     )
 
-    if difference > 0:
-
-        return (
-            f"↑ {difference:,.0f}"
+    return f"₹ {difference:+,.0f}"
         )
 
     if difference < 0:
@@ -1846,20 +1843,7 @@ def percent_delta(
         - previous_value
     )
 
-    if difference > 0:
-
-        return (
-            f"↑ {difference:.1f}%"
-        )
-
-    if difference < 0:
-
-        return (
-            f"↓ {abs(difference):.1f}%"
-        )
-
-    return "—"
-
+    return f"{difference:+.1f}%"
 
 def currency_delta(
     current_value,
@@ -1902,11 +1886,8 @@ def sale_loss_delta(
         - previous_value
     )
 
-    if difference > 0:
-
-        return (
-            f"↑ ₹ {difference:,.2f}"
-        )
+    return f"₹ {difference:+,.2f}"
+)
 
     if difference < 0:
 
