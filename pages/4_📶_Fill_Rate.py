@@ -459,6 +459,7 @@ def show_shop_details(shop_name):
     # silently drop the column.
     resolved = {}
     cols_present = []
+    seen_actual = set()
     for c in pref_cols:
         if c == "Fill Rate":
             cols_present.append(c)
@@ -466,14 +467,35 @@ def show_shop_details(shop_name):
         actual = _resolve_col(c, rows.columns)
         if actual is not None:
             resolved[c] = actual
-            cols_present.append(actual)
+            # Skip if this actual sheet column was already added under a
+            # different CONFIG name (e.g. "Standard TAT" resolving to the
+            # exact same header as "TAT") — otherwise the table shows the
+            # same data twice under two labels.
+            if actual not in seen_actual:
+                cols_present.append(actual)
+                seen_actual.add(actual)
 
+    missing_msgs = []
     if standard_tat_col not in resolved:
-        st.caption(
-            f"⚠️ Couldn't find a '{standard_tat_col}' column in the sheet — "
-            f"check the exact header spelling, or update "
-            f"CONFIG['standard_tat_column'] to match it."
+        missing_msgs.append(
+            f"Couldn't find a '{standard_tat_col}' column in the sheet."
         )
+    elif resolved.get(standard_tat_col) == resolved.get(tat_col):
+        missing_msgs.append(
+            f"'{standard_tat_col}' and '{tat_col}' both matched the same "
+            f"sheet column ('{resolved.get(tat_col)}') — the sheet likely "
+            f"doesn't have a separate Standard TAT header yet, so only one "
+            f"copy is shown."
+        )
+    if CONFIG["variance_column"] not in resolved:
+        missing_msgs.append(
+            f"Couldn't find a '{CONFIG['variance_column']}' column in the sheet."
+        )
+    if missing_msgs:
+        st.caption("⚠️ " + " ".join(missing_msgs))
+
+    with st.expander("Debug: exact column headers in this sheet"):
+        st.write(list(rows.columns))
 
     st.caption(f"{len(rows):,} order rows for **{shop_name}**")
 
