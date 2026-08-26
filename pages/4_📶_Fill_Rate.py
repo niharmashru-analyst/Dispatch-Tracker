@@ -177,6 +177,43 @@ div.stButton > button:hover {{
     border-color:#4C6FFF;
     color:#4C6FFF;
 }}
+
+/* Bordered "grid" look for the main shop table — outer box border,
+   a divider line under every row, and a divider between every
+   column so it reads like a real bordered table. */
+.fillrate-grid {{
+    border:1px solid #E4E7ED;
+    border-radius:10px;
+    overflow:hidden;
+    background:#fff;
+}}
+.fillrate-grid [data-testid="stHorizontalBlock"] {{
+    border-bottom:1px solid #E4E7ED;
+    padding:2px 6px;
+}}
+.fillrate-grid [data-testid="stHorizontalBlock"]:last-child {{
+    border-bottom:none;
+}}
+.fillrate-grid [data-testid="stHorizontalBlock"] > div:not(:last-child) {{
+    border-right:1px solid #E4E7ED;
+}}
+/* Header row (the first row inside the grid) — clickable sort
+   buttons, styled to look like a header rather than a data row. */
+.fillrate-grid [data-testid="stHorizontalBlock"]:first-child {{
+    background:#F8F9FC;
+}}
+.fillrate-grid [data-testid="stHorizontalBlock"]:first-child div.stButton > button {{
+    font-weight:700;
+    color:#1F2937;
+    background:transparent;
+    border:none;
+    box-shadow:none;
+}}
+.fillrate-grid div.stButton > button {{
+    border:none;
+    border-radius:0;
+    box-shadow:none;
+}}
 </style>
 """, unsafe_allow_html=True)
 
@@ -298,7 +335,10 @@ chain_agg["fill_rate"] = _fill_rate(chain_agg["invoice_qty"], chain_agg["order_q
 chain_agg = chain_agg.sort_values("fill_rate", ascending=DEFAULT_SORT_ASC)
 
 bars = alt.Chart(chain_agg).mark_bar(color="#4C6FFF", cornerRadiusTopLeft=4, cornerRadiusTopRight=4).encode(
-    x=alt.X(f"{chain_col}:N", sort=None, title="Chain"),
+    x=alt.X(
+        f"{chain_col}:N", sort=None, title="Chain",
+        axis=alt.Axis(labelAngle=-40, labelAlign="right", labelPadding=6),
+    ),
     y=alt.Y("fill_rate:Q", title="Fill Rate (%)"),
     tooltip=[
         alt.Tooltip(f"{chain_col}:N", title="Chain"),
@@ -339,7 +379,7 @@ if has_order_id:
 if has_invoice_no:
     metric_options.insert(1 if has_order_id else 0, "InvoiceNumber (count)")
 if has_sale_loss:
-    metric_options.append("Sale Loss (In Lacs.)")
+    metric_options.append("Sale Loss (In Lacs)")
 if has_tat:
     metric_options.append("TAT (avg)")
 
@@ -359,7 +399,7 @@ SORT_KEY_MAP = {
     "Order Qty": "order_qty",
     "Invoice Qty": "invoice_qty",
     "Fill Rate": "fill_rate",
-    "Sale Loss (In Lacs.)": "sale_loss",
+    "Sale Loss (In Lacs)": "sale_loss",
     "TAT (avg)": "tat_avg",
 }
 
@@ -402,7 +442,7 @@ def show_shop_details(shop_name):
         if c == "Fill Rate":
             column_config[c] = st.column_config.NumberColumn(c, format="%.1f%%")
         elif c == sloss_col:
-            column_config[c] = st.column_config.NumberColumn("Sale Loss (In Lacs.)", format="₹ %.2f")
+            column_config[c] = st.column_config.NumberColumn("Sale Loss (In Lacs)", format="₹ %.2f")
         elif c == tat_col:
             column_config[c] = st.column_config.NumberColumn(format="%.1f")
         elif _looks_like(c, DATE_COL_HINTS):
@@ -414,47 +454,57 @@ def show_shop_details(shop_name):
 
 
 # ------------------------------------------------------------
-# SORT — a compact control above the table (instead of clickable
-# header pills, which looked heavy/inconsistent next to the plain
-# data rows). Pick a column and a direction; the header row below
-# stays plain, right-aligned text that matches the data underneath.
+# SORT — click a column header itself to sort by it (no separate
+# selectbox anymore). Each header cycles through 3 states on
+# repeated clicks, in this order: Ascending -> Descending -> Normal
+# (back to the default, unsorted view).
 # ------------------------------------------------------------
-if "fillrate_sort_key" not in st.session_state:
-    st.session_state["fillrate_sort_key"] = DEFAULT_SORT_KEY
-    st.session_state["fillrate_sort_asc"] = DEFAULT_SORT_ASC
+if "fillrate_sort_col" not in st.session_state:
+    st.session_state["fillrate_sort_col"] = None       # "__shop__" or a SORT_KEY_MAP value
+    st.session_state["fillrate_sort_dir"] = None        # "asc" | "desc" | None
 
-sort_options = [shop_col] + visible_metrics
-current_label = shop_col if st.session_state["fillrate_sort_key"] == "__shop__" else next(
-    (lbl for lbl, key in SORT_KEY_MAP.items() if key == st.session_state["fillrate_sort_key"]),
-    DEFAULT_SORT_KEY,
-)
-if current_label not in sort_options:
-    current_label = sort_options[0]
 
-sc1, sc2 = st.columns([3, 1])
-with sc1:
-    chosen_label = st.selectbox(
-        "Sort by", sort_options, index=sort_options.index(current_label), key="fillrate_sort_select",
-    )
-with sc2:
-    ascending = st.toggle("Ascending", value=st.session_state["fillrate_sort_asc"], key="fillrate_sort_asc_toggle")
+def _cycle_sort(col_key: str):
+    cur_col = st.session_state["fillrate_sort_col"]
+    cur_dir = st.session_state["fillrate_sort_dir"]
+    if cur_col != col_key:
+        st.session_state["fillrate_sort_col"] = col_key
+        st.session_state["fillrate_sort_dir"] = "asc"
+    elif cur_dir == "asc":
+        st.session_state["fillrate_sort_dir"] = "desc"
+    else:  # was "desc" -> third click resets to Normal
+        st.session_state["fillrate_sort_col"] = None
+        st.session_state["fillrate_sort_dir"] = None
 
-st.session_state["fillrate_sort_key"] = "__shop__" if chosen_label == shop_col else SORT_KEY_MAP[chosen_label]
-st.session_state["fillrate_sort_asc"] = ascending
 
-sort_key = st.session_state["fillrate_sort_key"]
-sort_col = shop_col if sort_key == "__shop__" else sort_key
-shop_view = shop_view.sort_values(sort_col, ascending=ascending, na_position="last")
+def _arrow_for(col_key: str) -> str:
+    if st.session_state["fillrate_sort_col"] != col_key:
+        return ""
+    return " ▲" if st.session_state["fillrate_sort_dir"] == "asc" else " ▼"
 
-# Plain header row — right-aligned for numeric columns, matching the
-# alignment of the data rows below.
+
 header_widths = [3] + [1] * len(visible_metrics)
-header_cols = st.columns(header_widths)
-header_cols[0].markdown(f"**{shop_col}**")
-for hc, label in zip(header_cols[1:], visible_metrics):
-    _right(hc, f"<b>{label}</b>")
 
-st.markdown('<div style="border-bottom:1px solid #E4E7ED; margin:2px 0 6px;"></div>', unsafe_allow_html=True)
+# Everything from here to the closing </div> renders inside the
+# bordered grid box (outer border + row/column divider lines).
+st.markdown('<div class="fillrate-grid">', unsafe_allow_html=True)
+
+header_cols = st.columns(header_widths)
+if header_cols[0].button(f"{shop_col}{_arrow_for('__shop__')}", key="fillrate_header___shop__", use_container_width=True):
+    _cycle_sort("__shop__")
+for hc, label in zip(header_cols[1:], visible_metrics):
+    key = SORT_KEY_MAP[label]
+    if hc.button(f"{label}{_arrow_for(key)}", key=f"fillrate_header_{key}", use_container_width=True):
+        _cycle_sort(key)
+
+# Apply whatever sort state the header click above (or a prior run)
+# left us with. "Normal" (col=None) leaves shop_view in its default
+# groupby order.
+active_col = st.session_state["fillrate_sort_col"]
+active_dir = st.session_state["fillrate_sort_dir"]
+if active_col:
+    sort_col = shop_col if active_col == "__shop__" else active_col
+    shop_view = shop_view.sort_values(sort_col, ascending=(active_dir == "asc"), na_position="last")
 
 for row_idx, row in shop_view.reset_index(drop=True).iterrows():
     row_cols = st.columns(header_widths)
@@ -472,9 +522,11 @@ for row_idx, row in shop_view.reset_index(drop=True).iterrows():
         elif label == "Fill Rate":
             val = row["fill_rate"]
             _right(rc, "—" if pd.isna(val) else f"{val:.1f}%")
-        elif label == "Sale Loss (In Lacs.)":
+        elif label == "Sale Loss (In Lacs)":
             val = row.get("sale_loss")
             _right(rc, "—" if val is None or pd.isna(val) else f"₹ {val:,.2f}")
         elif label == "TAT (avg)":
             val = row.get("tat_avg")
             _right(rc, "—" if val is None or pd.isna(val) else f"{val:.1f}")
+
+st.markdown('</div>', unsafe_allow_html=True)
