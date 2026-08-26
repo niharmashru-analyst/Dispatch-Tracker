@@ -68,6 +68,7 @@ CONFIG = {
     "db_code_column": "DB Code",
     "category_column": "Category",
     "tat_column": "TAT",
+    "standard_tat_column": "Standard TAT",
 }
 
 FILTER_COLUMNS = [
@@ -279,6 +280,7 @@ oqty_col = CONFIG["order_qty_column"]
 iqty_col = CONFIG["invoice_qty_column"]
 sloss_col = CONFIG["sale_loss_column"]
 tat_col = CONFIG["tat_column"]
+standard_tat_col = CONFIG["standard_tat_column"]
 
 # ------------------------------------------------------------
 # CHAIN FILL RATE — bar chart (drawn later, after Filters below,
@@ -420,6 +422,20 @@ st.caption(f"{len(shop_view):,} of {len(shop_agg):,} shops")
 
 
 @st.dialog("Shop Order Details", width="large")
+def _resolve_col(target, available_cols):
+    """Match a configured column name against the sheet's real headers,
+    tolerating case and stray whitespace differences (e.g. CONFIG says
+    "Standard TAT" but the sheet has " standard tat " or "STANDARD TAT").
+    Returns the actual column name to use, or None if no match at all."""
+    if target in available_cols:
+        return target
+    target_key = target.strip().lower()
+    for c in available_cols:
+        if str(c).strip().lower() == target_key:
+            return c
+    return None
+
+
 def show_shop_details(shop_name):
     rows = filtered[filtered[shop_col].astype(str) == str(shop_name)].copy()
     if rows.empty:
@@ -435,23 +451,47 @@ def show_shop_details(shop_name):
         CONFIG["db_code_column"], CONFIG["category_column"], oid_col,
         CONFIG["invoice_date_column"], inv_col, oqty_col, iqty_col,
         "Fill Rate", sloss_col, CONFIG["delivery_date_column"],
-        CONFIG["actual_delivery_days_column"], CONFIG["variance_column"],
-        tat_col,
+        CONFIG["actual_delivery_days_column"], standard_tat_col,
+        CONFIG["variance_column"], tat_col,
     ]
-    cols_present = [c for c in pref_cols if c == "Fill Rate" or c in rows.columns]
+    # Resolve each configured name to whatever the sheet actually calls
+    # it (case/whitespace-tolerant) so a small header mismatch doesn't
+    # silently drop the column.
+    resolved = {}
+    cols_present = []
+    for c in pref_cols:
+        if c == "Fill Rate":
+            cols_present.append(c)
+            continue
+        actual = _resolve_col(c, rows.columns)
+        if actual is not None:
+            resolved[c] = actual
+            cols_present.append(actual)
+
+    if standard_tat_col not in resolved:
+        st.caption(
+            f"⚠️ Couldn't find a '{standard_tat_col}' column in the sheet — "
+            f"check the exact header spelling, or update "
+            f"CONFIG['standard_tat_column'] to match it."
+        )
 
     st.caption(f"{len(rows):,} order rows for **{shop_name}**")
 
-    sort_col = CONFIG["wh_receiving_date_column"] if CONFIG["wh_receiving_date_column"] in rows.columns else cols_present[0]
+    wh_date_actual = resolved.get(CONFIG["wh_receiving_date_column"])
+    sort_col = wh_date_actual if wh_date_actual else cols_present[0]
     display = rows[cols_present].sort_values(by=sort_col, ascending=False)
+
+    resolved_sloss = resolved.get(sloss_col)
+    resolved_tat = resolved.get(tat_col)
+    resolved_std_tat = resolved.get(standard_tat_col)
 
     column_config = {}
     for c in cols_present:
         if c == "Fill Rate":
             column_config[c] = st.column_config.NumberColumn(c, format="%.1f%%")
-        elif c == sloss_col:
+        elif c == resolved_sloss:
             column_config[c] = st.column_config.NumberColumn("Sale Loss (In Lacs)", format="₹ %.2f")
-        elif c == tat_col:
+        elif c in (resolved_tat, resolved_std_tat):
             column_config[c] = st.column_config.NumberColumn(format="%.1f")
         elif _looks_like(c, DATE_COL_HINTS):
             column_config[c] = st.column_config.DateColumn(c, format="DD-MM-YYYY")
