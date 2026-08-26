@@ -167,7 +167,7 @@ st.markdown(
 CONFIG = {
 
     # Excel source
-    "sharepoint_secret": "SHAREPOINT_EXCEL_URL",
+    "sharepoint_secret": "SHAREPOINT_ORDER_ITEMS_URL",
 
     # Main dimensions
     "chain": "Gen. Bus. Posting Group",
