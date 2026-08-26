@@ -148,7 +148,7 @@ def _fill_rate(invoice_qty, order_qty):
 
 def _right(container, text):
     container.markdown(
-        f'<div style="text-align:right; padding-top:6px; white-space:nowrap;">{text}</div>',
+        f'<div style="text-align:right; white-space:nowrap;">{text}</div>',
         unsafe_allow_html=True,
     )
 
@@ -179,40 +179,46 @@ div.stButton > button:hover {{
 }}
 
 /* Bordered "grid" look for the main shop table — outer box border,
-   a divider line under every row, and a divider between every
-   column so it reads like a real bordered table. */
-.fillrate-grid {{
+   a divider line under every row, a divider between every column,
+   and vertical centering so multi-line shop names don't throw off
+   alignment. Scoped to the container's key-based class rather than
+   a raw unclosed <div>, since the latter isn't reliably nested by
+   newer Streamlit versions. */
+.st-key-fillrate_table {{
     border:1px solid #E4E7ED;
     border-radius:10px;
     overflow:hidden;
     background:#fff;
 }}
-.fillrate-grid [data-testid="stHorizontalBlock"] {{
+.st-key-fillrate_table [data-testid="stHorizontalBlock"] {{
     border-bottom:1px solid #E4E7ED;
     padding:2px 6px;
+    align-items:center;
 }}
-.fillrate-grid [data-testid="stHorizontalBlock"]:last-child {{
+.st-key-fillrate_table [data-testid="stHorizontalBlock"]:last-child {{
     border-bottom:none;
 }}
-.fillrate-grid [data-testid="stHorizontalBlock"] > div:not(:last-child) {{
+.st-key-fillrate_table [data-testid="stHorizontalBlock"] > [data-testid="column"]:not(:last-child),
+.st-key-fillrate_table [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:not(:last-child) {{
     border-right:1px solid #E4E7ED;
 }}
 /* Header row (the first row inside the grid) — clickable sort
    buttons, styled to look like a header rather than a data row. */
-.fillrate-grid [data-testid="stHorizontalBlock"]:first-child {{
+.st-key-fillrate_table [data-testid="stHorizontalBlock"]:first-child {{
     background:#F8F9FC;
 }}
-.fillrate-grid [data-testid="stHorizontalBlock"]:first-child div.stButton > button {{
+.st-key-fillrate_table [data-testid="stHorizontalBlock"]:first-child div.stButton > button {{
     font-weight:700;
     color:#1F2937;
     background:transparent;
     border:none;
     box-shadow:none;
 }}
-.fillrate-grid div.stButton > button {{
+.st-key-fillrate_table div.stButton > button {{
     border:none;
     border-radius:0;
     box-shadow:none;
+    white-space:normal;
 }}
 </style>
 """, unsafe_allow_html=True)
@@ -485,48 +491,46 @@ def _arrow_for(col_key: str) -> str:
 
 header_widths = [3] + [1] * len(visible_metrics)
 
-# Everything from here to the closing </div> renders inside the
-# bordered grid box (outer border + row/column divider lines).
-st.markdown('<div class="fillrate-grid">', unsafe_allow_html=True)
+# A real Streamlit container (not a raw unclosed <div>) so everything
+# inside is a genuine DOM descendant that our .st-key-fillrate_table
+# CSS can reliably target, regardless of Streamlit version.
+with st.container(key="fillrate_table"):
+    header_cols = st.columns(header_widths)
+    if header_cols[0].button(f"{shop_col}{_arrow_for('__shop__')}", key="fillrate_header___shop__", use_container_width=True):
+        _cycle_sort("__shop__")
+    for hc, label in zip(header_cols[1:], visible_metrics):
+        key = SORT_KEY_MAP[label]
+        if hc.button(f"{label}{_arrow_for(key)}", key=f"fillrate_header_{key}", use_container_width=True):
+            _cycle_sort(key)
 
-header_cols = st.columns(header_widths)
-if header_cols[0].button(f"{shop_col}{_arrow_for('__shop__')}", key="fillrate_header___shop__", use_container_width=True):
-    _cycle_sort("__shop__")
-for hc, label in zip(header_cols[1:], visible_metrics):
-    key = SORT_KEY_MAP[label]
-    if hc.button(f"{label}{_arrow_for(key)}", key=f"fillrate_header_{key}", use_container_width=True):
-        _cycle_sort(key)
+    # Apply whatever sort state the header click above (or a prior
+    # run) left us with. "Normal" (col=None) leaves shop_view in its
+    # default groupby order.
+    active_col = st.session_state["fillrate_sort_col"]
+    active_dir = st.session_state["fillrate_sort_dir"]
+    if active_col:
+        sort_col = shop_col if active_col == "__shop__" else active_col
+        shop_view = shop_view.sort_values(sort_col, ascending=(active_dir == "asc"), na_position="last")
 
-# Apply whatever sort state the header click above (or a prior run)
-# left us with. "Normal" (col=None) leaves shop_view in its default
-# groupby order.
-active_col = st.session_state["fillrate_sort_col"]
-active_dir = st.session_state["fillrate_sort_dir"]
-if active_col:
-    sort_col = shop_col if active_col == "__shop__" else active_col
-    shop_view = shop_view.sort_values(sort_col, ascending=(active_dir == "asc"), na_position="last")
-
-for row_idx, row in shop_view.reset_index(drop=True).iterrows():
-    row_cols = st.columns(header_widths)
-    if row_cols[0].button(str(row[shop_col]), key=f"shop_btn_{row_idx}_{row[shop_col]}", use_container_width=True):
-        show_shop_details(row[shop_col])
-    for rc, label in zip(row_cols[1:], visible_metrics):
-        if label == "Order Id (count)":
-            _right(rc, f"{int(row['order_count']):,}")
-        elif label == "InvoiceNumber (count)":
-            _right(rc, f"{int(row['invoice_count']):,}")
-        elif label == "Order Qty":
-            _right(rc, f"{row['order_qty']:,.0f}")
-        elif label == "Invoice Qty":
-            _right(rc, f"{row['invoice_qty']:,.0f}")
-        elif label == "Fill Rate":
-            val = row["fill_rate"]
-            _right(rc, "—" if pd.isna(val) else f"{val:.1f}%")
-        elif label == "Sale Loss (In Lacs)":
-            val = row.get("sale_loss")
-            _right(rc, "—" if val is None or pd.isna(val) else f"₹ {val:,.2f}")
-        elif label == "TAT (avg)":
-            val = row.get("tat_avg")
-            _right(rc, "—" if val is None or pd.isna(val) else f"{val:.1f}")
-
-st.markdown('</div>', unsafe_allow_html=True)
+    for row_idx, row in shop_view.reset_index(drop=True).iterrows():
+        row_cols = st.columns(header_widths)
+        if row_cols[0].button(str(row[shop_col]), key=f"shop_btn_{row_idx}_{row[shop_col]}", use_container_width=True):
+            show_shop_details(row[shop_col])
+        for rc, label in zip(row_cols[1:], visible_metrics):
+            if label == "Order Id (count)":
+                _right(rc, f"{int(row['order_count']):,}")
+            elif label == "InvoiceNumber (count)":
+                _right(rc, f"{int(row['invoice_count']):,}")
+            elif label == "Order Qty":
+                _right(rc, f"{row['order_qty']:,.0f}")
+            elif label == "Invoice Qty":
+                _right(rc, f"{row['invoice_qty']:,.0f}")
+            elif label == "Fill Rate":
+                val = row["fill_rate"]
+                _right(rc, "—" if pd.isna(val) else f"{val:.1f}%")
+            elif label == "Sale Loss (In Lacs)":
+                val = row.get("sale_loss")
+                _right(rc, "—" if val is None or pd.isna(val) else f"₹ {val:,.2f}")
+            elif label == "TAT (avg)":
+                val = row.get("tat_avg")
+                _right(rc, "—" if val is None or pd.isna(val) else f"{val:.1f}")
