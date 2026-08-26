@@ -10,11 +10,12 @@ Reads the same live dispatch tracker used by the other pages
      between the chart and the table, and narrow both the chart and
      the shop table below.
   3. A summary table, one row per shop ("Customer Name"), with total
-     Order Qty / Invoice Qty / Fill Rate / Sale Loss for that shop.
-     Click any column header to sort by it (click again to flip
-     direction). Click a shop's name (a plain button — no checkboxes)
-     to open a detail popup with every individual order row for that
-     shop, including DB Code and Category.
+     Order Qty / Invoice Qty / Fill Rate / Sale Loss / TAT (avg) for
+     that shop. Click any column in the "Sort by" control to sort by
+     it (toggle Ascending to flip direction). Click a shop's name (a
+     plain button — no checkboxes) to open a detail popup with every
+     individual order row for that shop, including DB Code, Category
+     and TAT (shown as the very last column).
 
 Drop this file into the same pages/ folder as the other dashboard
 pages. Rename with a leading number (e.g. 4_Fill_Rate.py) to control
@@ -29,6 +30,14 @@ NOTE ON ASSUMPTIONS (edit CONFIG below if any of these are wrong):
     "Actual Deli. Days", "Variance", "DB Code", "Category" are
     assumed to already exist as columns in the dispatch tracker
     (same naming as the sheet).
+  - "TAT" is assumed to be its own column already in (or being added
+    to) the dispatch tracker sheet, holding a number (days). We don't
+    rename/relabel it — whatever header you give it in the sheet is
+    what shows up here. In the shop detail popup it's placed as the
+    LAST column. In the shop summary table it's shown as an average
+    ("TAT (avg)") and is a selectable/sortable metric like the rest.
+    If the actual column name in your sheet differs from "TAT",
+    update CONFIG["tat_column"] below.
 ------------------------------------------------------------
 """
 
@@ -58,6 +67,7 @@ CONFIG = {
     "variance_column": "Variance",
     "db_code_column": "DB Code",
     "category_column": "Category",
+    "tat_column": "TAT",
 }
 
 FILTER_COLUMNS = [
@@ -71,12 +81,12 @@ DEFAULT_SORT_ASC = True  # worst fill rate first
 DATE_COL_HINTS = ["date"]
 CURRENCY_COL_HINTS = ["value", "lacs", "sale loss"]
 PERCENT_COL_HINTS = ["%"]
-# Order Qty / Invoice Qty aren't caught by the hints above, but Excel
-# often leaves numeric-looking columns as text (stray spaces, commas,
-# a blank cell forcing the whole column to object dtype) — which
-# makes pandas' groupby(...).sum() raise a TypeError. Force these
-# to numeric explicitly.
-QTY_COL_HINTS = ["qty", "quantity"]
+# Order Qty / Invoice Qty / TAT aren't caught by the hints above, but
+# Excel often leaves numeric-looking columns as text (stray spaces,
+# commas, a blank cell forcing the whole column to object dtype) —
+# which makes pandas' groupby(...).sum()/.mean() raise a TypeError.
+# Force these to numeric explicitly.
+QTY_COL_HINTS = ["qty", "quantity", "tat"]
 
 C_BG = "#F4F6FA"
 
@@ -150,6 +160,23 @@ div[data-testid="stMetric"] {{
     background:#fff; border-radius:14px; padding:14px 16px;
     box-shadow:0 1px 3px rgba(0,0,0,.08);
 }}
+/* Compact, table-row-style buttons instead of big default pills */
+div.stButton > button {{
+    width:100%;
+    text-align:left;
+    padding:0.3rem 0.75rem;
+    border-radius:6px;
+    border:1px solid #E4E7ED;
+    background:#fff;
+    font-weight:500;
+    font-size:0.9rem;
+    color:#1F2937;
+    box-shadow:none;
+}}
+div.stButton > button:hover {{
+    border-color:#4C6FFF;
+    color:#4C6FFF;
+}}
 </style>
 """, unsafe_allow_html=True)
 
@@ -176,6 +203,11 @@ except Exception as e:
     st.error(f"Could not load the live file: {e}")
     st.stop()
 
+# Reserved here so it renders above the chain chart, but it's filled
+# in further down once filters have been applied (so it always
+# reflects the current filtered view, same as the chart and table).
+total_metrics_slot = st.empty()
+
 required_cols = [
     CONFIG["chain_column"], CONFIG["shop_column"],
     CONFIG["order_qty_column"], CONFIG["invoice_qty_column"],
@@ -192,6 +224,7 @@ if missing:
 has_sale_loss = CONFIG["sale_loss_column"] in df.columns
 has_order_id = CONFIG["order_id_column"] in df.columns
 has_invoice_no = CONFIG["invoice_number_column"] in df.columns
+has_tat = CONFIG["tat_column"] in df.columns
 
 chain_col = CONFIG["chain_column"]
 shop_col = CONFIG["shop_column"]
@@ -200,6 +233,7 @@ inv_col = CONFIG["invoice_number_column"]
 oqty_col = CONFIG["order_qty_column"]
 iqty_col = CONFIG["invoice_qty_column"]
 sloss_col = CONFIG["sale_loss_column"]
+tat_col = CONFIG["tat_column"]
 
 # ------------------------------------------------------------
 # CHAIN FILL RATE — bar chart (drawn later, after Filters below,
@@ -232,6 +266,26 @@ for col, vals in active_filters.items():
 if filtered.empty:
     st.warning("No rows match the current filters.")
     st.stop()
+
+# ------------------------------------------------------------
+# OVERALL TOTAL FILL RATE — sum of every Order Qty / sum of every
+# Invoice Qty across the (filtered) data, not an average of each
+# shop's or chain's individual fill rate. Rendered into the slot
+# reserved right after the page caption, so it sits above everything
+# else and always reflects whatever filters are active.
+# ------------------------------------------------------------
+total_order_qty = pd.to_numeric(filtered[oqty_col], errors="coerce").sum()
+total_invoice_qty = pd.to_numeric(filtered[iqty_col], errors="coerce").sum()
+overall_fill_rate = (total_invoice_qty / total_order_qty * 100) if total_order_qty else None
+
+with total_metrics_slot.container():
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Total Order Qty", f"{total_order_qty:,.0f}")
+    m2.metric("Total Invoice Qty", f"{total_invoice_qty:,.0f}")
+    m3.metric(
+        "Overall Fill Rate",
+        "—" if overall_fill_rate is None else f"{overall_fill_rate:.1f}%",
+    )
 
 # Now that filters are known, build and draw the chart into the slot
 # reserved above the Filters section.
@@ -270,6 +324,8 @@ if has_invoice_no:
     agg_kwargs["invoice_count"] = (inv_col, "nunique")
 if has_sale_loss:
     agg_kwargs["sale_loss"] = (sloss_col, "sum")
+if has_tat:
+    agg_kwargs["tat_avg"] = (tat_col, "mean")
 
 shop_agg = filtered.groupby(shop_col, dropna=False).agg(**agg_kwargs).reset_index()
 shop_agg["fill_rate"] = _fill_rate(shop_agg["invoice_qty"], shop_agg["order_qty"])
@@ -283,7 +339,9 @@ if has_order_id:
 if has_invoice_no:
     metric_options.insert(1 if has_order_id else 0, "InvoiceNumber (count)")
 if has_sale_loss:
-    metric_options.append("Sale Loss")
+    metric_options.append("Sale Loss (In Lacs.)")
+if has_tat:
+    metric_options.append("TAT (avg)")
 
 with st.expander("Columns to show", expanded=False):
     visible_metrics = st.multiselect(
@@ -301,7 +359,8 @@ SORT_KEY_MAP = {
     "Order Qty": "order_qty",
     "Invoice Qty": "invoice_qty",
     "Fill Rate": "fill_rate",
-    "Sale Loss": "sale_loss",
+    "Sale Loss (In Lacs.)": "sale_loss",
+    "TAT (avg)": "tat_avg",
 }
 
 shop_search = st.text_input("🔍 Search shop name", key="fillrate_shop_search")
@@ -320,12 +379,16 @@ def show_shop_details(shop_name):
         return
     rows["Fill Rate"] = _fill_rate(rows[iqty_col], rows[oqty_col])
 
+    # TAT stays at the very end of the row — whatever header this
+    # column has in the source sheet is what will display, since we
+    # don't relabel it below.
     pref_cols = [
         CONFIG["wh_receiving_date_column"], shop_col,
         CONFIG["db_code_column"], CONFIG["category_column"], oid_col,
         CONFIG["invoice_date_column"], inv_col, oqty_col, iqty_col,
         "Fill Rate", sloss_col, CONFIG["delivery_date_column"],
         CONFIG["actual_delivery_days_column"], CONFIG["variance_column"],
+        tat_col,
     ]
     cols_present = [c for c in pref_cols if c == "Fill Rate" or c in rows.columns]
 
@@ -338,6 +401,10 @@ def show_shop_details(shop_name):
     for c in cols_present:
         if c == "Fill Rate":
             column_config[c] = st.column_config.NumberColumn(c, format="%.1f%%")
+        elif c == sloss_col:
+            column_config[c] = st.column_config.NumberColumn("Sale Loss (In Lacs.)", format="₹ %.2f")
+        elif c == tat_col:
+            column_config[c] = st.column_config.NumberColumn(format="%.1f")
         elif _looks_like(c, DATE_COL_HINTS):
             column_config[c] = st.column_config.DateColumn(c, format="DD-MM-YYYY")
         elif _looks_like(c, CURRENCY_COL_HINTS):
@@ -347,39 +414,47 @@ def show_shop_details(shop_name):
 
 
 # ------------------------------------------------------------
-# SORTABLE HEADER ROW — click any header to sort by it, click again
-# to flip direction. State lives in session_state so it survives the
-# rerun triggered by the click.
+# SORT — a compact control above the table (instead of clickable
+# header pills, which looked heavy/inconsistent next to the plain
+# data rows). Pick a column and a direction; the header row below
+# stays plain, right-aligned text that matches the data underneath.
 # ------------------------------------------------------------
 if "fillrate_sort_key" not in st.session_state:
     st.session_state["fillrate_sort_key"] = DEFAULT_SORT_KEY
     st.session_state["fillrate_sort_asc"] = DEFAULT_SORT_ASC
 
-header_widths = [3] + [1] * len(visible_metrics)
-header_cols = st.columns(header_widths)
+sort_options = [shop_col] + visible_metrics
+current_label = shop_col if st.session_state["fillrate_sort_key"] == "__shop__" else next(
+    (lbl for lbl, key in SORT_KEY_MAP.items() if key == st.session_state["fillrate_sort_key"]),
+    DEFAULT_SORT_KEY,
+)
+if current_label not in sort_options:
+    current_label = sort_options[0]
 
+sc1, sc2 = st.columns([3, 1])
+with sc1:
+    chosen_label = st.selectbox(
+        "Sort by", sort_options, index=sort_options.index(current_label), key="fillrate_sort_select",
+    )
+with sc2:
+    ascending = st.toggle("Ascending", value=st.session_state["fillrate_sort_asc"], key="fillrate_sort_asc_toggle")
 
-def _sort_button(container, label, sort_key):
-    active = st.session_state["fillrate_sort_key"] == sort_key
-    arrow = (" ▲" if st.session_state["fillrate_sort_asc"] else " ▼") if active else ""
-    if container.button(f"{label}{arrow}", key=f"fillrate_sort_btn_{sort_key}", use_container_width=True):
-        if active:
-            st.session_state["fillrate_sort_asc"] = not st.session_state["fillrate_sort_asc"]
-        else:
-            st.session_state["fillrate_sort_key"] = sort_key
-            st.session_state["fillrate_sort_asc"] = True
-
-
-_sort_button(header_cols[0], shop_col, "__shop__")
-for hc, label in zip(header_cols[1:], visible_metrics):
-    _sort_button(hc, label, SORT_KEY_MAP[label])
-
-st.markdown('<div style="border-bottom:1px solid #E4E7ED; margin-bottom:4px;"></div>', unsafe_allow_html=True)
+st.session_state["fillrate_sort_key"] = "__shop__" if chosen_label == shop_col else SORT_KEY_MAP[chosen_label]
+st.session_state["fillrate_sort_asc"] = ascending
 
 sort_key = st.session_state["fillrate_sort_key"]
-sort_asc = st.session_state["fillrate_sort_asc"]
 sort_col = shop_col if sort_key == "__shop__" else sort_key
-shop_view = shop_view.sort_values(sort_col, ascending=sort_asc, na_position="last")
+shop_view = shop_view.sort_values(sort_col, ascending=ascending, na_position="last")
+
+# Plain header row — right-aligned for numeric columns, matching the
+# alignment of the data rows below.
+header_widths = [3] + [1] * len(visible_metrics)
+header_cols = st.columns(header_widths)
+header_cols[0].markdown(f"**{shop_col}**")
+for hc, label in zip(header_cols[1:], visible_metrics):
+    _right(hc, f"<b>{label}</b>")
+
+st.markdown('<div style="border-bottom:1px solid #E4E7ED; margin:2px 0 6px;"></div>', unsafe_allow_html=True)
 
 for row_idx, row in shop_view.reset_index(drop=True).iterrows():
     row_cols = st.columns(header_widths)
@@ -397,6 +472,9 @@ for row_idx, row in shop_view.reset_index(drop=True).iterrows():
         elif label == "Fill Rate":
             val = row["fill_rate"]
             _right(rc, "—" if pd.isna(val) else f"{val:.1f}%")
-        elif label == "Sale Loss":
+        elif label == "Sale Loss (In Lacs.)":
             val = row.get("sale_loss")
             _right(rc, "—" if val is None or pd.isna(val) else f"₹ {val:,.2f}")
+        elif label == "TAT (avg)":
+            val = row.get("tat_avg")
+            _right(rc, "—" if val is None or pd.isna(val) else f"{val:.1f}")
