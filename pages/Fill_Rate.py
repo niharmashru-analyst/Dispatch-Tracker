@@ -67,6 +67,12 @@ SORT_ASCENDING = True  # worst fill rate first; flip to False for best-first
 DATE_COL_HINTS = ["date"]
 CURRENCY_COL_HINTS = ["value", "lacs", "sale loss"]
 PERCENT_COL_HINTS = ["%"]
+# Order Qty / Invoice Qty aren't caught by the hints above, but Excel
+# often leaves numeric-looking columns as text (stray spaces, commas,
+# a blank cell forcing the whole column to object dtype) — which
+# makes pandas' groupby(...).sum() raise a TypeError. Force these
+# to numeric explicitly.
+QTY_COL_HINTS = ["qty", "quantity"]
 
 C_BG = "#F4F6FA"
 
@@ -113,6 +119,9 @@ def load_data(url: str) -> pd.DataFrame:
             df[col] = pd.to_numeric(cleaned, errors="coerce")
         elif _looks_like(col, PERCENT_COL_HINTS):
             cleaned = df[col].astype(str).str.replace("%", "", regex=False).str.strip()
+            df[col] = pd.to_numeric(cleaned, errors="coerce")
+        elif _looks_like(col, QTY_COL_HINTS):
+            cleaned = df[col].astype(str).str.replace(",", "", regex=False).str.strip()
             df[col] = pd.to_numeric(cleaned, errors="coerce")
 
     return df
