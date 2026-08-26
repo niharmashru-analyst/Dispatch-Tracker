@@ -511,7 +511,7 @@ def show_shop_details(shop_name):
         elif c == resolved_sloss:
             column_config[c] = st.column_config.NumberColumn("Sale Loss (In Lacs)", format="₹ %.2f")
         elif c in (resolved_tat, resolved_std_tat):
-            column_config[c] = st.column_config.NumberColumn(format="%.1f")
+            column_config[c] = st.column_config.NumberColumn(format="%.0f")
         elif _looks_like(c, DATE_COL_HINTS):
             column_config[c] = st.column_config.DateColumn(c, format="DD-MM-YYYY")
         elif _looks_like(c, CURRENCY_COL_HINTS):
