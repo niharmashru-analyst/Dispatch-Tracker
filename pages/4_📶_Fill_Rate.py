@@ -146,9 +146,9 @@ def _fill_rate(invoice_qty, order_qty):
     return (pd.to_numeric(invoice_qty, errors="coerce") / pd.to_numeric(order_qty, errors="coerce") * 100).round(1)
 
 
-def _right(container, text):
+def _center(container, text):
     container.markdown(
-        f'<div style="text-align:right; white-space:nowrap;">{text}</div>',
+        f'<div style="text-align:center; white-space:nowrap;">{text}</div>',
         unsafe_allow_html=True,
     )
 
@@ -160,10 +160,12 @@ div[data-testid="stMetric"] {{
     background:#fff; border-radius:14px; padding:14px 16px;
     box-shadow:0 1px 3px rgba(0,0,0,.08);
 }}
-/* Compact, table-row-style buttons instead of big default pills */
+/* Compact, table-row-style buttons instead of big default pills.
+   Text is centered so shop names / header labels line up with the
+   center-aligned numeric cells below them. */
 div.stButton > button {{
     width:100%;
-    text-align:left;
+    text-align:center;
     padding:0.3rem 0.75rem;
     border-radius:6px;
     border:1px solid #E4E7ED;
@@ -518,19 +520,19 @@ with st.container(key="fillrate_table"):
             show_shop_details(row[shop_col])
         for rc, label in zip(row_cols[1:], visible_metrics):
             if label == "Order (count)":
-                _right(rc, f"{int(row['order_count']):,}")
+                _center(rc, f"{int(row['order_count']):,}")
             elif label == "Invoice (count)":
-                _right(rc, f"{int(row['invoice_count']):,}")
+                _center(rc, f"{int(row['invoice_count']):,}")
             elif label == "Order Qty":
-                _right(rc, f"{row['order_qty']:,.0f}")
+                _center(rc, f"{row['order_qty']:,.0f}")
             elif label == "Invoice Qty":
-                _right(rc, f"{row['invoice_qty']:,.0f}")
+                _center(rc, f"{row['invoice_qty']:,.0f}")
             elif label == "Fill Rate":
                 val = row["fill_rate"]
-                _right(rc, "—" if pd.isna(val) else f"{val:.1f}%")
+                _center(rc, "—" if pd.isna(val) else f"{val:.1f}%")
             elif label == "Sale Loss (In Lacs)":
                 val = row.get("sale_loss")
-                _right(rc, "—" if val is None or pd.isna(val) else f"₹ {val:,.2f}")
+                _center(rc, "—" if val is None or pd.isna(val) else f"₹ {val:,.2f}")
             elif label == "TAT (avg)":
                 val = row.get("tat_avg")
-                _right(rc, "—" if val is None or pd.isna(val) else f"{val:.1f}")
+                _center(rc, "—" if val is None or pd.isna(val) else f"{val:.1f}")
