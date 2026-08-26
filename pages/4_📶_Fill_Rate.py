@@ -6,13 +6,15 @@ Reads the same live dispatch tracker used by the other pages
 
   1. A bar chart comparing Fill Rate (Invoice Qty / Order Qty) across
      chains ("Name" column).
-  2. A summary table, one row per shop ("Customer Name"), with total
+  2. Filters (Name / InvoiceNumber / Order Id / Final Remarks) — sit
+     between the chart and the table, and narrow both the chart and
+     the shop table below.
+  3. A summary table, one row per shop ("Customer Name"), with total
      Order Qty / Invoice Qty / Fill Rate / Sale Loss for that shop.
-     Clicking a shop's name (a plain button — no checkboxes) opens a
-     detail popup with every individual order row for that shop.
-
-Filtering by chain (or the other Filter fields) narrows the chart
-and the shop table to only that chain's shops.
+     Click any column header to sort by it (click again to flip
+     direction). Click a shop's name (a plain button — no checkboxes)
+     to open a detail popup with every individual order row for that
+     shop, including DB Code and Category.
 
 Drop this file into the same pages/ folder as the other dashboard
 pages. Rename with a leading number (e.g. 4_Fill_Rate.py) to control
@@ -24,10 +26,9 @@ NOTE ON ASSUMPTIONS (edit CONFIG below if any of these are wrong):
     usually has many of each) — not a single ID. The full IDs are
     all visible in the per-shop detail popup.
   - "Wh Receiving Date", "Invoice Date", "Delivery Date",
-    "Actual Deli. Days", "Variance" are assumed to already exist as
-    columns in the dispatch tracker (same naming as the sheet).
-  - The summary table is sorted by Fill Rate ascending by default
-    (worst-performing shops first) — change SORT_ASCENDING below.
+    "Actual Deli. Days", "Variance", "DB Code", "Category" are
+    assumed to already exist as columns in the dispatch tracker
+    (same naming as the sheet).
 ------------------------------------------------------------
 """
 
@@ -55,6 +56,8 @@ CONFIG = {
     "delivery_date_column": "Delivery Date",
     "actual_delivery_days_column": "Actual Deli. Days",
     "variance_column": "Variance",
+    "db_code_column": "DB Code",
+    "category_column": "Category",
 }
 
 FILTER_COLUMNS = [
@@ -62,7 +65,8 @@ FILTER_COLUMNS = [
     CONFIG["order_id_column"], "Final Remarks",
 ]
 
-SORT_ASCENDING = True  # worst fill rate first; flip to False for best-first
+DEFAULT_SORT_KEY = "fill_rate"
+DEFAULT_SORT_ASC = True  # worst fill rate first
 
 DATE_COL_HINTS = ["date"]
 CURRENCY_COL_HINTS = ["value", "lacs", "sale loss"]
@@ -132,6 +136,13 @@ def _fill_rate(invoice_qty, order_qty):
     return (pd.to_numeric(invoice_qty, errors="coerce") / pd.to_numeric(order_qty, errors="coerce") * 100).round(1)
 
 
+def _right(container, text):
+    container.markdown(
+        f'<div style="text-align:right; padding-top:6px; white-space:nowrap;">{text}</div>',
+        unsafe_allow_html=True,
+    )
+
+
 st.markdown(f"""
 <style>
 .stApp {{ background: {C_BG}; }}
@@ -182,8 +193,26 @@ has_sale_loss = CONFIG["sale_loss_column"] in df.columns
 has_order_id = CONFIG["order_id_column"] in df.columns
 has_invoice_no = CONFIG["invoice_number_column"] in df.columns
 
+chain_col = CONFIG["chain_column"]
+shop_col = CONFIG["shop_column"]
+oid_col = CONFIG["order_id_column"]
+inv_col = CONFIG["invoice_number_column"]
+oqty_col = CONFIG["order_qty_column"]
+iqty_col = CONFIG["invoice_qty_column"]
+sloss_col = CONFIG["sale_loss_column"]
+
 # ------------------------------------------------------------
-# FILTERS — Name (chain), InvoiceNumber, Order Id, Final Remarks
+# CHAIN FILL RATE — bar chart (drawn later, after Filters below,
+# but the placeholder is reserved here so it appears first).
+# ------------------------------------------------------------
+st.markdown("### Fill Rate by Chain")
+chart_slot = st.empty()
+
+st.markdown("---")
+
+# ------------------------------------------------------------
+# FILTERS — Name (chain), InvoiceNumber, Order Id, Final Remarks.
+# Sits below the chart, above the table, and drives both.
 # ------------------------------------------------------------
 with st.expander("Filters", expanded=False):
     fcols = st.columns(3)
@@ -204,26 +233,15 @@ if filtered.empty:
     st.warning("No rows match the current filters.")
     st.stop()
 
-chain_col = CONFIG["chain_column"]
-shop_col = CONFIG["shop_column"]
-oid_col = CONFIG["order_id_column"]
-inv_col = CONFIG["invoice_number_column"]
-oqty_col = CONFIG["order_qty_column"]
-iqty_col = CONFIG["invoice_qty_column"]
-sloss_col = CONFIG["sale_loss_column"]
-
-# ------------------------------------------------------------
-# CHAIN FILL RATE — bar chart
-# ------------------------------------------------------------
-st.markdown("### Fill Rate by Chain")
-
+# Now that filters are known, build and draw the chart into the slot
+# reserved above the Filters section.
 chain_agg = (
     filtered.groupby(chain_col, dropna=False)
     .agg(order_qty=(oqty_col, "sum"), invoice_qty=(iqty_col, "sum"))
     .reset_index()
 )
 chain_agg["fill_rate"] = _fill_rate(chain_agg["invoice_qty"], chain_agg["order_qty"])
-chain_agg = chain_agg.sort_values("fill_rate", ascending=SORT_ASCENDING)
+chain_agg = chain_agg.sort_values("fill_rate", ascending=DEFAULT_SORT_ASC)
 
 bars = alt.Chart(chain_agg).mark_bar(color="#4C6FFF", cornerRadiusTopLeft=4, cornerRadiusTopRight=4).encode(
     x=alt.X(f"{chain_col}:N", sort=None, title="Chain"),
@@ -238,9 +256,7 @@ bars = alt.Chart(chain_agg).mark_bar(color="#4C6FFF", cornerRadiusTopLeft=4, cor
 
 labels = bars.mark_text(dy=-8, color="#1F2937").encode(text=alt.Text("fill_rate:Q", format=".1f"))
 
-st.altair_chart(bars + labels, use_container_width=True)
-
-st.markdown("---")
+chart_slot.altair_chart(bars + labels, use_container_width=True)
 
 # ------------------------------------------------------------
 # SHOP SUMMARY TABLE
@@ -257,7 +273,6 @@ if has_sale_loss:
 
 shop_agg = filtered.groupby(shop_col, dropna=False).agg(**agg_kwargs).reset_index()
 shop_agg["fill_rate"] = _fill_rate(shop_agg["invoice_qty"], shop_agg["order_qty"])
-shop_agg = shop_agg.sort_values("fill_rate", ascending=SORT_ASCENDING)
 
 # Columns to show — same pattern as the Order Tracking page's picker,
 # scoped to this table's fixed set of metric columns (shop name is
@@ -278,6 +293,17 @@ with st.expander("Columns to show", expanded=False):
 if not visible_metrics:
     visible_metrics = metric_options
 
+# Maps each display label to the underlying shop_agg column used for
+# both sorting and rendering.
+SORT_KEY_MAP = {
+    "Order Id (count)": "order_count",
+    "InvoiceNumber (count)": "invoice_count",
+    "Order Qty": "order_qty",
+    "Invoice Qty": "invoice_qty",
+    "Fill Rate": "fill_rate",
+    "Sale Loss": "sale_loss",
+}
+
 shop_search = st.text_input("🔍 Search shop name", key="fillrate_shop_search")
 shop_view = shop_agg
 if shop_search:
@@ -295,7 +321,8 @@ def show_shop_details(shop_name):
     rows["Fill Rate"] = _fill_rate(rows[iqty_col], rows[oqty_col])
 
     pref_cols = [
-        CONFIG["wh_receiving_date_column"], shop_col, oid_col,
+        CONFIG["wh_receiving_date_column"], shop_col,
+        CONFIG["db_code_column"], CONFIG["category_column"], oid_col,
         CONFIG["invoice_date_column"], inv_col, oqty_col, iqty_col,
         "Fill Rate", sloss_col, CONFIG["delivery_date_column"],
         CONFIG["actual_delivery_days_column"], CONFIG["variance_column"],
@@ -319,14 +346,40 @@ def show_shop_details(shop_name):
     st.dataframe(display, use_container_width=True, hide_index=True, height=460, column_config=column_config)
 
 
-# Header row for the summary table
+# ------------------------------------------------------------
+# SORTABLE HEADER ROW — click any header to sort by it, click again
+# to flip direction. State lives in session_state so it survives the
+# rerun triggered by the click.
+# ------------------------------------------------------------
+if "fillrate_sort_key" not in st.session_state:
+    st.session_state["fillrate_sort_key"] = DEFAULT_SORT_KEY
+    st.session_state["fillrate_sort_asc"] = DEFAULT_SORT_ASC
+
 header_widths = [3] + [1] * len(visible_metrics)
 header_cols = st.columns(header_widths)
-header_cols[0].markdown(f"**{shop_col}**")
+
+
+def _sort_button(container, label, sort_key):
+    active = st.session_state["fillrate_sort_key"] == sort_key
+    arrow = (" ▲" if st.session_state["fillrate_sort_asc"] else " ▼") if active else ""
+    if container.button(f"{label}{arrow}", key=f"fillrate_sort_btn_{sort_key}", use_container_width=True):
+        if active:
+            st.session_state["fillrate_sort_asc"] = not st.session_state["fillrate_sort_asc"]
+        else:
+            st.session_state["fillrate_sort_key"] = sort_key
+            st.session_state["fillrate_sort_asc"] = True
+
+
+_sort_button(header_cols[0], shop_col, "__shop__")
 for hc, label in zip(header_cols[1:], visible_metrics):
-    hc.markdown(f"**{label}**")
+    _sort_button(hc, label, SORT_KEY_MAP[label])
 
 st.markdown('<div style="border-bottom:1px solid #E4E7ED; margin-bottom:4px;"></div>', unsafe_allow_html=True)
+
+sort_key = st.session_state["fillrate_sort_key"]
+sort_asc = st.session_state["fillrate_sort_asc"]
+sort_col = shop_col if sort_key == "__shop__" else sort_key
+shop_view = shop_view.sort_values(sort_col, ascending=sort_asc, na_position="last")
 
 for row_idx, row in shop_view.reset_index(drop=True).iterrows():
     row_cols = st.columns(header_widths)
@@ -334,16 +387,16 @@ for row_idx, row in shop_view.reset_index(drop=True).iterrows():
         show_shop_details(row[shop_col])
     for rc, label in zip(row_cols[1:], visible_metrics):
         if label == "Order Id (count)":
-            rc.write(f"{int(row['order_count']):,}")
+            _right(rc, f"{int(row['order_count']):,}")
         elif label == "InvoiceNumber (count)":
-            rc.write(f"{int(row['invoice_count']):,}")
+            _right(rc, f"{int(row['invoice_count']):,}")
         elif label == "Order Qty":
-            rc.write(f"{row['order_qty']:,.0f}")
+            _right(rc, f"{row['order_qty']:,.0f}")
         elif label == "Invoice Qty":
-            rc.write(f"{row['invoice_qty']:,.0f}")
+            _right(rc, f"{row['invoice_qty']:,.0f}")
         elif label == "Fill Rate":
             val = row["fill_rate"]
-            rc.write("—" if pd.isna(val) else f"{val:.1f}%")
+            _right(rc, "—" if pd.isna(val) else f"{val:.1f}%")
         elif label == "Sale Loss":
             val = row.get("sale_loss")
-            rc.write("—" if val is None or pd.isna(val) else f"₹ {val:,.0f}")
+            _right(rc, "—" if val is None or pd.isna(val) else f"₹ {val:,.2f}")
