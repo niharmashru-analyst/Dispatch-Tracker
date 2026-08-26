@@ -14,20 +14,26 @@ import streamlit as st
 
 st.set_page_config(
     page_title="Fill Rate",
+    page_icon="📊",
     layout="wide",
-    page_icon="📶",
+    initial_sidebar_state="expanded",
 )
 
 
 # ============================================================
-# CONFIG
+# CONFIGURATION
 # ============================================================
 
 CONFIG = {
+
+    # IMPORTANT:
     # Keep your existing secret name
     "sharepoint_secret": "SHAREPOINT_EXCEL_URL",
 
-    # Existing source columns
+    # --------------------------------------------------------
+    # BASIC
+    # --------------------------------------------------------
+
     "order_received_date": "Order Received Date",
     "order_upload_date": "Order Upload date",
     "wh_receiving_date": "Wh Receiving Date",
@@ -41,11 +47,19 @@ CONFIG = {
     "order_id": "Order Id",
     "external_document": "External Document No.",
 
+    # --------------------------------------------------------
+    # ORDER
+    # --------------------------------------------------------
+
     "order_qty": "Order Qty",
     "order_value": "Order Value",
 
     "wh_remarks": "Wh. Remarks",
     "order_punch_time": "Order Punch time",
+
+    # --------------------------------------------------------
+    # INVOICE
+    # --------------------------------------------------------
 
     "invoice_date": "Invoice Date",
     "invoice_qty": "Invoice Qty",
@@ -53,8 +67,16 @@ CONFIG = {
     "invoice_number": "InvoiceNumber",
     "invoice_time": "Invoice Time",
 
+    # --------------------------------------------------------
+    # FILL RATE
+    # --------------------------------------------------------
+
     "fr_value": "Over all FR % (Value)",
     "fr_qty": "Over all FR % (Qty)",
+
+    # --------------------------------------------------------
+    # DISPATCH
+    # --------------------------------------------------------
 
     "dispatch_date": "Dispatch Date",
     "awb": "AWB NUMBER",
@@ -62,14 +84,21 @@ CONFIG = {
     "mode": "Mode",
     "box": "Box",
     "weight": "Weight",
-    "pin_code": "Pin Code",
 
+    # --------------------------------------------------------
+    # DELIVERY
+    # --------------------------------------------------------
+
+    "pin_code": "Pin Code",
     "delivery_status": "Delivery Status",
     "delivery_date": "Delivery Date",
 
+    # --------------------------------------------------------
+    # SLA / TAT
+    # --------------------------------------------------------
+
     "dispatched_sla": "Dispatched SLA",
     "logistics_sla": "Logistics SLA",
-
     "wh_remark": "Wh Remark",
     "logistics_remarks": "Logistics Remarks",
 
@@ -83,6 +112,10 @@ CONFIG = {
     "dispatch_to_delivery": "Dispatch to Deli TAT",
     "otd_bucket": "OTD Bucket",
 
+    # --------------------------------------------------------
+    # REMARKS / OTHER
+    # --------------------------------------------------------
+
     "omt_remarks": "OMT REMARKS",
     "type": "Type",
     "name": "Name",
@@ -95,11 +128,19 @@ CONFIG = {
     "actual_delivery_days": "Actual Deli. Days",
     "variance": "Vairance",
 
+    # --------------------------------------------------------
+    # COMMERCIAL
+    # --------------------------------------------------------
+
     "order_value_lacs": "Order Value Lacs",
     "invoice_value_lacs": "Invoice Value Lacs",
     "sale_loss": "Sale Loss",
 }
 
+
+# ============================================================
+# MONTH ORDER
+# ============================================================
 
 MONTH_ORDER = [
     "Jan",
@@ -118,69 +159,152 @@ MONTH_ORDER = [
 
 
 # ============================================================
-# ORIGINAL WHITE THEME
+# COLORS / LIGHT THEME
 # ============================================================
 
-C_BG = "#F4F6FA"
+C_BG = "#F5F7FB"
 C_CARD = "#FFFFFF"
-C_BORDER = "#E4E7ED"
-C_TEXT = "#1F2937"
+C_BORDER = "#DDE3EC"
+C_BORDER_DARK = "#C9D1DC"
+C_TEXT = "#172B4D"
 C_MUTED = "#6B7280"
-C_BLUE = "#4C6FFF"
+C_BLUE = "#3157D5"
 
+
+# ============================================================
+# CUSTOM CSS
+# ============================================================
 
 st.markdown(
     f"""
     <style>
 
+    /* ======================================================
+       MAIN
+       ====================================================== */
+
     .stApp {{
         background: {C_BG};
     }}
 
-    /* Main headings */
     h1, h2, h3, h4 {{
         color: {C_TEXT} !important;
     }}
 
-    /* Normal text */
-    p, label, span {{
+    p {{
         color: {C_TEXT};
     }}
 
-    /* KPI cards */
+
+    /* ======================================================
+       EXECUTIVE KPI CARDS
+       ====================================================== */
+
     div[data-testid="stMetric"] {{
         background: {C_CARD};
         border: 1px solid {C_BORDER};
         border-radius: 14px;
-        padding: 14px 16px;
-        box-shadow: 0 1px 4px rgba(0,0,0,.07);
+        padding: 15px 18px;
+        min-height: 105px;
+        box-shadow: 0 2px 7px rgba(20, 30, 50, 0.06);
     }}
 
     div[data-testid="stMetricLabel"] {{
-        color: {C_MUTED} !important;
+        color: {C_TEXT} !important;
+        font-size: 14px !important;
     }}
 
     div[data-testid="stMetricValue"] {{
         color: {C_TEXT} !important;
-        font-weight: 700;
+        font-weight: 750 !important;
+        font-size: 32px !important;
     }}
 
     div[data-testid="stMetricDelta"] {{
-        font-weight: 600;
+        font-weight: 600 !important;
     }}
 
-    /* Original style table */
+
+    /* ======================================================
+       SECTION TITLES
+       ====================================================== */
+
+    .section-title {{
+        font-size: 20px;
+        font-weight: 750;
+        color: {C_TEXT};
+        margin-top: 20px;
+        margin-bottom: 10px;
+    }}
+
+    .dashboard-caption {{
+        color: {C_MUTED};
+        font-size: 13px;
+        margin-top: -5px;
+        margin-bottom: 15px;
+    }}
+
+
+    /* ======================================================
+       EXECUTIVE HEADER
+       ====================================================== */
+
+    .executive-header {{
+        background: #FFFFFF;
+        border: 1px solid {C_BORDER};
+        border-radius: 14px;
+        padding: 15px 20px;
+        margin-bottom: 15px;
+        box-shadow: 0 2px 7px rgba(20, 30, 50, 0.05);
+    }}
+
+    .executive-title {{
+        color: {C_TEXT};
+        font-size: 22px;
+        font-weight: 750;
+    }}
+
+    .executive-subtitle {{
+        color: {C_MUTED};
+        font-size: 13px;
+        margin-top: 3px;
+    }}
+
+
+    /* ======================================================
+       CUSTOMER TABLE
+       ====================================================== */
+
+    /*
+       The previous version had a large white gap between
+       rows because Streamlit's vertical block gap was being
+       applied between every horizontal row.
+
+       These rules remove that gap and create clean borders.
+    */
+
+    div[data-testid="stVerticalBlock"]:has(
+        div.st-key-fillrate_table
+    ) {{
+        gap: 0 !important;
+    }}
+
     .st-key-fillrate_table {{
+        background: #FFFFFF;
         border: 1px solid {C_BORDER};
         border-radius: 10px;
         overflow: hidden;
-        background: #fff;
+        padding: 0 !important;
+        gap: 0 !important;
     }}
 
-    .st-key-fillrate_table [data-testid="stHorizontalBlock"] {{
+    .st-key-fillrate_table
+    [data-testid="stHorizontalBlock"] {{
+        gap: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        min-height: 48px !important;
         border-bottom: 1px solid {C_BORDER};
-        padding: 2px 6px;
-        align-items: center;
     }}
 
     .st-key-fillrate_table
@@ -190,47 +314,69 @@ st.markdown(
 
     .st-key-fillrate_table
     [data-testid="stHorizontalBlock"]
-    > [data-testid="column"]:not(:last-child),
-    .st-key-fillrate_table
-    [data-testid="stHorizontalBlock"]
-    > [data-testid="stColumn"]:not(:last-child) {{
-        border-right: 1px solid {C_BORDER};
+    > [data-testid="column"] {{
+        padding: 0 !important;
+        margin: 0 !important;
     }}
 
     .st-key-fillrate_table
+    [data-testid="stHorizontalBlock"]
+    > [data-testid="column"]:not(:last-child) {{
+        border-right: 1px solid {C_BORDER};
+    }}
+
+    /* Header */
+    .st-key-fillrate_table
     [data-testid="stHorizontalBlock"]:first-child {{
-        background: #F8F9FC;
+        background: #F7F9FC;
+        min-height: 55px !important;
     }}
 
     .st-key-fillrate_table
     [data-testid="stHorizontalBlock"]:first-child
     div.stButton > button {{
-        font-weight: 700;
-        color: {C_TEXT};
-        background: transparent;
-        border: none;
-        box-shadow: none;
+        font-weight: 700 !important;
+        color: {C_TEXT} !important;
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+        border-radius: 0 !important;
+    }}
+
+    /* Table buttons */
+    .st-key-fillrate_table
+    div.stButton {{
+        margin: 0 !important;
+        padding: 0 !important;
     }}
 
     .st-key-fillrate_table
     div.stButton > button {{
-        border: none;
-        border-radius: 0;
-        box-shadow: none;
-        white-space: normal;
-        background: transparent;
-        color: {C_TEXT};
+        min-height: 48px !important;
+        height: 48px !important;
+        border: none !important;
+        border-radius: 0 !important;
+        box-shadow: none !important;
+        background: transparent !important;
+        color: {C_TEXT} !important;
+        padding: 4px 8px !important;
+        margin: 0 !important;
+        white-space: normal !important;
     }}
 
     .st-key-fillrate_table
     div.stButton > button:hover {{
-        color: {C_BLUE};
-        background: #F8F9FC;
+        background: #F2F5FA !important;
+        color: {C_BLUE} !important;
     }}
 
-    /* Normal buttons */
+
+    /* ======================================================
+       NORMAL BUTTONS
+       ====================================================== */
+
     div.stButton > button {{
-        border-radius: 7px;
+        border-radius: 8px;
         border: 1px solid {C_BORDER};
         background: #FFFFFF;
         color: {C_TEXT};
@@ -242,46 +388,25 @@ st.markdown(
         color: {C_BLUE};
     }}
 
-    /* Search/input boxes */
-    div[data-baseweb="input"] {{
-        background: #FFFFFF;
-    }}
 
-    /* Section title */
-    .section-title {{
-        font-size: 20px;
-        font-weight: 700;
+    /* ======================================================
+       TABS
+       ====================================================== */
+
+    button[data-baseweb="tab"] {{
         color: {C_TEXT};
-        margin-top: 20px;
-        margin-bottom: 10px;
+        font-weight: 600;
     }}
 
-    .dashboard-caption {{
-        color: {C_MUTED};
-        font-size: 14px;
-        margin-top: -8px;
-        margin-bottom: 18px;
-    }}
 
-    .executive-header {{
-        background: #FFFFFF;
+    /* ======================================================
+       DATAFRAME
+       ====================================================== */
+
+    div[data-testid="stDataFrame"] {{
         border: 1px solid {C_BORDER};
-        border-radius: 14px;
-        padding: 16px 20px;
-        margin-bottom: 12px;
-        box-shadow: 0 1px 4px rgba(0,0,0,.05);
-    }}
-
-    .executive-title {{
-        font-size: 21px;
-        font-weight: 750;
-        color: {C_TEXT};
-    }}
-
-    .executive-subtitle {{
-        font-size: 13px;
-        color: {C_MUTED};
-        margin-top: 3px;
+        border-radius: 10px;
+        overflow: hidden;
     }}
 
     </style>
@@ -291,19 +416,18 @@ st.markdown(
 
 
 # ============================================================
-# HELPERS
+# HELPER FUNCTIONS
 # ============================================================
 
 def resolve_col(target, columns):
-    """
-    Case / whitespace tolerant matching.
-    """
+
     if target in columns:
         return target
 
     target_key = str(target).strip().lower()
 
     for col in columns:
+
         if str(col).strip().lower() == target_key:
             return col
 
@@ -311,6 +435,7 @@ def resolve_col(target, columns):
 
 
 def clean_numeric(series):
+
     return pd.to_numeric(
         series.astype(str)
         .str.replace(",", "", regex=False)
@@ -331,13 +456,17 @@ def clean_numeric(series):
 
 
 def month_sort_key(month):
+
     try:
-        return MONTH_ORDER.index(str(month))
+        return MONTH_ORDER.index(
+            str(month)
+        )
     except ValueError:
         return 999
 
 
 def format_number(value):
+
     if value is None or pd.isna(value):
         return "—"
 
@@ -345,48 +474,67 @@ def format_number(value):
 
 
 def format_value(value):
+
     if value is None or pd.isna(value):
         return "—"
 
     value = float(value)
 
     if abs(value) >= 10_000_000:
-        return f"₹ {value / 10_000_000:.2f} Cr"
+        return (
+            f"₹ {value / 10_000_000:.2f} Cr"
+        )
 
     if abs(value) >= 100_000:
-        return f"₹ {value / 100_000:.2f} L"
+        return (
+            f"₹ {value / 100_000:.2f} L"
+        )
 
     return f"₹ {value:,.0f}"
 
 
 def format_percent(value):
+
     if value is None or pd.isna(value):
         return "—"
 
     return f"{float(value):.1f}%"
 
 
-def safe_ratio(numerator, denominator):
-    if denominator is None:
-        return np.nan
+def safe_ratio(
+    numerator,
+    denominator,
+):
 
     try:
+
         if denominator == 0:
             return np.nan
-    except Exception:
-        pass
 
-    return numerator / denominator * 100
+        return (
+            numerator
+            / denominator
+            * 100
+        )
+
+    except Exception:
+
+        return np.nan
 
 
 def center(container, text):
+
     container.markdown(
         f"""
         <div style="
+            display:flex;
+            align-items:center;
+            justify-content:center;
             text-align:center;
-            white-space:nowrap;
+            min-height:48px;
             color:{C_TEXT};
             font-size:14px;
+            padding:0 4px;
         ">
             {text}
         </div>
@@ -404,14 +552,22 @@ def sharepoint_download_url(url):
     if "download=1" in url.lower():
         return url
 
-    separator = "&" if "?" in url else "?"
+    separator = (
+        "&"
+        if "?" in url
+        else "?"
+    )
 
-    return f"{url}{separator}download=1"
+    return (
+        f"{url}"
+        f"{separator}"
+        f"download=1"
+    )
 
 
 @st.cache_data(
     ttl=300,
-    show_spinner="Fetching latest data..."
+    show_spinner="Fetching latest Excel workbook..."
 )
 def load_workbook(url):
 
@@ -431,12 +587,14 @@ def load_workbook(url):
     if "html" in content_type.lower():
 
         raise ValueError(
-            "Got a login/redirect page instead of the Excel file. "
-            "Please check SharePoint access."
+            "SharePoint returned an HTML/login page "
+            "instead of the Excel workbook."
         )
 
     workbook = pd.read_excel(
-        io.BytesIO(response.content),
+        io.BytesIO(
+            response.content
+        ),
         sheet_name=None,
         engine="openpyxl",
     )
@@ -445,7 +603,7 @@ def load_workbook(url):
 
 
 # ============================================================
-# LOAD ALL MONTHLY SHEETS
+# LOAD MONTHLY SHEETS
 # ============================================================
 
 @st.cache_data(
@@ -461,12 +619,18 @@ def load_data(url):
 
     for sheet_name, raw_df in workbook.items():
 
-        sheet_name = str(sheet_name).strip()
+        sheet_name = str(
+            sheet_name
+        ).strip()
 
+        # Only monthly sheets
         if sheet_name not in MONTH_ORDER:
             continue
 
-        if raw_df is None or raw_df.empty:
+        if raw_df is None:
+            continue
+
+        if raw_df.empty:
             continue
 
         df = raw_df.copy()
@@ -476,11 +640,15 @@ def load_data(url):
             for c in df.columns
         ]
 
-        # Sheet name is authoritative for MOM.
-        df["__Dashboard_Month"] = sheet_name
+        # Sheet name is authoritative.
+        df["__Dashboard_Month"] = (
+            sheet_name
+        )
 
         frames.append(df)
-        sheets_used.append(sheet_name)
+        sheets_used.append(
+            sheet_name
+        )
 
     if not frames:
 
@@ -495,33 +663,43 @@ def load_data(url):
         sort=False,
     )
 
-    # --------------------------------------------------------
+    # ========================================================
     # NUMERIC COLUMNS
-    # --------------------------------------------------------
+    # ========================================================
 
     numeric_columns = [
+
         CONFIG["order_qty"],
         CONFIG["order_value"],
+
         CONFIG["invoice_qty"],
         CONFIG["invoice_value"],
+
         CONFIG["fr_value"],
         CONFIG["fr_qty"],
+
         CONFIG["box"],
         CONFIG["weight"],
+
         CONFIG["dispatched_sla"],
         CONFIG["logistics_sla"],
+
         CONFIG["ageing"],
         CONFIG["standard_tat"],
+
         CONFIG["order_to_wh"],
         CONFIG["oti"],
         CONFIG["otd"],
         CONFIG["otde"],
+
         CONFIG["dispatch_to_delivery"],
+
         CONFIG["otw_days"],
         CONFIG["invoice_days"],
         CONFIG["dispatch_days"],
         CONFIG["actual_delivery_days"],
         CONFIG["variance"],
+
         CONFIG["order_value_lacs"],
         CONFIG["invoice_value_lacs"],
         CONFIG["sale_loss"],
@@ -540,14 +718,16 @@ def load_data(url):
                 combined[actual]
             )
 
-    # --------------------------------------------------------
+    # ========================================================
     # DATES
-    # --------------------------------------------------------
+    # ========================================================
 
     date_columns = [
+
         CONFIG["order_received_date"],
         CONFIG["order_upload_date"],
         CONFIG["wh_receiving_date"],
+
         CONFIG["invoice_date"],
         CONFIG["dispatch_date"],
         CONFIG["delivery_date"],
@@ -568,27 +748,37 @@ def load_data(url):
                 dayfirst=True,
             )
 
-    # --------------------------------------------------------
+    # ========================================================
     # MONTH
-    # --------------------------------------------------------
+    # ========================================================
 
     combined["Month"] = combined[
         "__Dashboard_Month"
     ]
 
-    combined["__month_sort"] = combined[
-        "Month"
-    ].apply(month_sort_key)
+    combined["__month_sort"] = (
+        combined["Month"]
+        .apply(month_sort_key)
+    )
 
-    combined = combined.sort_values(
-        "__month_sort"
-    ).reset_index(drop=True)
+    combined = (
+        combined
+        .sort_values(
+            "__month_sort"
+        )
+        .reset_index(
+            drop=True
+        )
+    )
 
-    return combined, sheets_used
+    return (
+        combined,
+        sheets_used,
+    )
 
 
 # ============================================================
-# OFFICIAL + CALCULATED FR
+# DERIVED METRICS
 # ============================================================
 
 def add_derived_metrics(df):
@@ -615,33 +805,54 @@ def add_derived_metrics(df):
         df.columns,
     )
 
-    # Calculated quantity FR
+    # --------------------------------------------------------
+    # Calculated FR Qty
+    # --------------------------------------------------------
+
     if oq and iq:
 
-        df["__Calculated_FR_Qty"] = np.where(
+        df[
+            "__Calculated_FR_Qty"
+        ] = np.where(
             df[oq] != 0,
-            df[iq] / df[oq] * 100,
+            df[iq]
+            / df[oq]
+            * 100,
             np.nan,
         )
 
     else:
 
-        df["__Calculated_FR_Qty"] = np.nan
+        df[
+            "__Calculated_FR_Qty"
+        ] = np.nan
 
-    # Calculated value FR
+    # --------------------------------------------------------
+    # Calculated FR Value
+    # --------------------------------------------------------
+
     if ov and iv:
 
-        df["__Calculated_FR_Value"] = np.where(
+        df[
+            "__Calculated_FR_Value"
+        ] = np.where(
             df[ov] != 0,
-            df[iv] / df[ov] * 100,
+            df[iv]
+            / df[ov]
+            * 100,
             np.nan,
         )
 
     else:
 
-        df["__Calculated_FR_Value"] = np.nan
+        df[
+            "__Calculated_FR_Value"
+        ] = np.nan
 
-    # Official source FR
+    # --------------------------------------------------------
+    # Official FR
+    # --------------------------------------------------------
+
     fr_qty = resolve_col(
         CONFIG["fr_qty"],
         df.columns,
@@ -653,24 +864,33 @@ def add_derived_metrics(df):
     )
 
     if fr_qty:
+
         df["__FR_Qty"] = clean_numeric(
             df[fr_qty]
         )
+
     else:
+
         df["__FR_Qty"] = df[
             "__Calculated_FR_Qty"
         ]
 
     if fr_value:
+
         df["__FR_Value"] = clean_numeric(
             df[fr_value]
         )
+
     else:
+
         df["__FR_Value"] = df[
             "__Calculated_FR_Value"
         ]
 
+    # --------------------------------------------------------
     # Pending
+    # --------------------------------------------------------
+
     if oq and iq:
 
         df["__Pending_Qty"] = (
@@ -697,7 +917,7 @@ def add_derived_metrics(df):
 
 
 # ============================================================
-# AGGREGATION
+# MONTHLY AGGREGATION
 # ============================================================
 
 def aggregate_month(df):
@@ -732,7 +952,7 @@ def aggregate_month(df):
         df.columns,
     )
 
-    inv = resolve_col(
+    invoice = resolve_col(
         CONFIG["invoice_number"],
         df.columns,
     )
@@ -740,44 +960,65 @@ def aggregate_month(df):
     aggregation = {}
 
     if oq:
-        aggregation["order_qty"] = (
+
+        aggregation[
+            "order_qty"
+        ] = (
             oq,
             "sum",
         )
 
     if iq:
-        aggregation["invoice_qty"] = (
+
+        aggregation[
+            "invoice_qty"
+        ] = (
             iq,
             "sum",
         )
 
     if ov:
-        aggregation["order_value"] = (
+
+        aggregation[
+            "order_value"
+        ] = (
             ov,
             "sum",
         )
 
     if iv:
-        aggregation["invoice_value"] = (
+
+        aggregation[
+            "invoice_value"
+        ] = (
             iv,
             "sum",
         )
 
     if sale:
-        aggregation["sale_loss"] = (
+
+        aggregation[
+            "sale_loss"
+        ] = (
             sale,
             "sum",
         )
 
     if oid:
-        aggregation["orders"] = (
+
+        aggregation[
+            "orders"
+        ] = (
             oid,
             "nunique",
         )
 
-    if inv:
-        aggregation["invoices"] = (
-            inv,
+    if invoice:
+
+        aggregation[
+            "invoices"
+        ] = (
+            invoice,
             lambda x:
             x.dropna()
             .astype(str)
@@ -785,92 +1026,182 @@ def aggregate_month(df):
         )
 
     result = (
-        df.groupby(
+        df
+        .groupby(
             "Month",
             dropna=False,
         )
-        .agg(**aggregation)
+        .agg(
+            **aggregation
+        )
         .reset_index()
     )
 
-    if "order_qty" in result.columns:
+    # --------------------------------------------------------
+    # Qty FR
+    # --------------------------------------------------------
 
-        result["fr_qty"] = np.where(
-            result["order_qty"] != 0,
-            result["invoice_qty"]
-            / result["order_qty"]
+    if (
+        "order_qty"
+        in result.columns
+        and "invoice_qty"
+        in result.columns
+    ):
+
+        result[
+            "fr_qty"
+        ] = np.where(
+            result[
+                "order_qty"
+            ] != 0,
+
+            result[
+                "invoice_qty"
+            ]
+            /
+            result[
+                "order_qty"
+            ]
             * 100,
+
             np.nan,
         )
 
-        result["pending_qty"] = (
-            result["order_qty"]
-            - result["invoice_qty"]
+        result[
+            "pending_qty"
+        ] = (
+            result[
+                "order_qty"
+            ]
+            -
+            result[
+                "invoice_qty"
+            ]
         )
 
-    if "order_value" in result.columns:
+    # --------------------------------------------------------
+    # Value FR
+    # --------------------------------------------------------
 
-        result["fr_value"] = np.where(
-            result["order_value"] != 0,
-            result["invoice_value"]
-            / result["order_value"]
+    if (
+        "order_value"
+        in result.columns
+        and "invoice_value"
+        in result.columns
+    ):
+
+        result[
+            "fr_value"
+        ] = np.where(
+            result[
+                "order_value"
+            ] != 0,
+
+            result[
+                "invoice_value"
+            ]
+            /
+            result[
+                "order_value"
+            ]
             * 100,
+
             np.nan,
         )
 
-        result["pending_value"] = (
-            result["order_value"]
-            - result["invoice_value"]
+        result[
+            "pending_value"
+        ] = (
+            result[
+                "order_value"
+            ]
+            -
+            result[
+                "invoice_value"
+            ]
         )
 
-    result["__sort"] = result[
-        "Month"
-    ].apply(month_sort_key)
+    result["__sort"] = (
+        result["Month"]
+        .apply(month_sort_key)
+    )
 
-    result = result.sort_values(
-        "__sort"
-    ).drop(
-        columns="__sort"
+    result = (
+        result
+        .sort_values(
+            "__sort"
+        )
+        .drop(
+            columns="__sort"
+        )
     )
 
     return result
 
 
 # ============================================================
-# ORIGINAL CUSTOMER LOGIC
+# CUSTOMER SUMMARY
 # ============================================================
 
-def build_customer_summary(filtered):
+def build_customer_summary(
+    filtered
+):
 
-    customer_col = CONFIG["customer"]
-    order_id_col = CONFIG["order_id"]
-    invoice_col = CONFIG["invoice_number"]
-    oq_col = CONFIG["order_qty"]
-    iq_col = CONFIG["invoice_qty"]
-    sale_col = CONFIG["sale_loss"]
-    tat_col = CONFIG["actual_delivery_days"]
+    customer_col = CONFIG[
+        "customer"
+    ]
+
+    order_col = CONFIG[
+        "order_id"
+    ]
+
+    invoice_col = CONFIG[
+        "invoice_number"
+    ]
+
+    oq_col = CONFIG[
+        "order_qty"
+    ]
+
+    iq_col = CONFIG[
+        "invoice_qty"
+    ]
+
+    sale_col = CONFIG[
+        "sale_loss"
+    ]
+
+    tat_col = CONFIG[
+        "actual_delivery_days"
+    ]
 
     aggregation = {
+
         "order_qty": (
             oq_col,
             "sum",
         ),
+
         "invoice_qty": (
             iq_col,
             "sum",
         ),
     }
 
-    if order_id_col in filtered.columns:
+    if order_col in filtered.columns:
 
-        aggregation["order_count"] = (
-            order_id_col,
+        aggregation[
+            "order_count"
+        ] = (
+            order_col,
             "nunique",
         )
 
     if invoice_col in filtered.columns:
 
-        aggregation["invoice_count"] = (
+        aggregation[
+            "invoice_count"
+        ] = (
             invoice_col,
             lambda x:
             x.dropna()
@@ -880,16 +1211,45 @@ def build_customer_summary(filtered):
 
     if sale_col in filtered.columns:
 
-        aggregation["sale_loss"] = (
+        aggregation[
+            "sale_loss"
+        ] = (
             sale_col,
             "sum",
         )
 
     if tat_col in filtered.columns:
 
-        aggregation["tat_avg"] = (
-            tat_col,
-            "mean",
+        # Avoid obvious date-serial / corrupted TAT values.
+        # Normal delivery TAT should not be 172472 days.
+        tat_temp = filtered.copy()
+
+        tat_temp["__TAT_Clean"] = pd.to_numeric(
+            tat_temp[tat_col],
+            errors="coerce",
+        )
+
+        tat_temp.loc[
+            (
+                tat_temp["__TAT_Clean"] < 0
+            )
+            |
+            (
+                tat_temp["__TAT_Clean"] > 365
+            ),
+            "__TAT_Clean",
+        ] = np.nan
+
+        tat_summary = (
+            tat_temp
+            .groupby(
+                customer_col,
+                dropna=False,
+            )["__TAT_Clean"]
+            .mean()
+            .reset_index(
+                name="tat_avg"
+            )
         )
 
     summary = (
@@ -898,15 +1258,36 @@ def build_customer_summary(filtered):
             customer_col,
             dropna=False,
         )
-        .agg(**aggregation)
+        .agg(
+            **aggregation
+        )
         .reset_index()
     )
 
-    summary["fill_rate"] = np.where(
-        summary["order_qty"] != 0,
-        summary["invoice_qty"]
-        / summary["order_qty"]
+    if tat_col in filtered.columns:
+
+        summary = summary.merge(
+            tat_summary,
+            on=customer_col,
+            how="left",
+        )
+
+    summary[
+        "fill_rate"
+    ] = np.where(
+        summary[
+            "order_qty"
+        ] != 0,
+
+        summary[
+            "invoice_qty"
+        ]
+        /
+        summary[
+            "order_qty"
+        ]
         * 100,
+
         np.nan,
     )
 
@@ -914,7 +1295,7 @@ def build_customer_summary(filtered):
 
 
 # ============================================================
-# ORIGINAL CUSTOMER DETAIL POPUP
+# CUSTOMER DETAIL DIALOG
 # ============================================================
 
 def clear_selected_customer():
@@ -934,12 +1315,17 @@ def show_customer_details(
     filtered,
 ):
 
-    customer_col = CONFIG["customer"]
+    customer_col = CONFIG[
+        "customer"
+    ]
 
     rows = filtered[
-        filtered[customer_col]
+        filtered[
+            customer_col
+        ]
         .astype(str)
-        == str(customer_name)
+        ==
+        str(customer_name)
     ].copy()
 
     if rows.empty:
@@ -950,28 +1336,54 @@ def show_customer_details(
 
         return
 
-    rows["Fill Rate"] = np.where(
-        rows[CONFIG["order_qty"]] != 0,
-        rows[CONFIG["invoice_qty"]]
-        / rows[CONFIG["order_qty"]]
+    # --------------------------------------------------------
+    # Calculate row-level Fill Rate
+    # --------------------------------------------------------
+
+    rows[
+        "Fill Rate"
+    ] = np.where(
+
+        rows[
+            CONFIG["order_qty"]
+        ] != 0,
+
+        rows[
+            CONFIG["invoice_qty"]
+        ]
+        /
+        rows[
+            CONFIG["order_qty"]
+        ]
         * 100,
+
         np.nan,
     )
 
     # --------------------------------------------------------
-    # Original preferred order
+    # Original important fields
     # --------------------------------------------------------
 
-    pref_cols = [
+    preferred_columns = [
 
-        CONFIG["wh_receiving_date"],
+        CONFIG[
+            "wh_receiving_date"
+        ],
+
         customer_col,
+
         CONFIG["db_code"],
+
         CONFIG["category"],
+
         CONFIG["order_id"],
+
         CONFIG["invoice_date"],
+
         CONFIG["invoice_number"],
+
         CONFIG["order_qty"],
+
         CONFIG["invoice_qty"],
 
         "Fill Rate",
@@ -979,28 +1391,42 @@ def show_customer_details(
         CONFIG["sale_loss"],
 
         CONFIG["dispatch_date"],
-        CONFIG["actual_delivery_days"],
+
+        CONFIG[
+            "actual_delivery_days"
+        ],
+
         CONFIG["standard_tat"],
+
         CONFIG["variance"],
 
-        # Extra original operational details
         CONFIG["awb"],
+
         CONFIG["courier"],
+
         CONFIG["mode"],
-        CONFIG["delivery_status"],
-        CONFIG["delivery_date"],
-        CONFIG["final_remarks"],
+
+        CONFIG[
+            "delivery_status"
+        ],
+
+        CONFIG[
+            "delivery_date"
+        ],
+
+        CONFIG[
+            "final_remarks"
+        ],
     ]
 
-    cols_present = []
-
+    columns_to_show = []
     seen = set()
 
-    for requested in pref_cols:
+    for requested in preferred_columns:
 
         if requested == "Fill Rate":
 
-            cols_present.append(
+            columns_to_show.append(
                 requested
             )
 
@@ -1011,94 +1437,139 @@ def show_customer_details(
             rows.columns,
         )
 
-        if actual and actual not in seen:
+        if (
+            actual
+            and actual not in seen
+        ):
 
-            cols_present.append(
+            columns_to_show.append(
                 actual
             )
 
             seen.add(actual)
 
     # --------------------------------------------------------
-    # Add remaining important operational fields
+    # Additional operational fields
     # --------------------------------------------------------
 
-    additional_cols = [
+    additional_columns = [
 
-        CONFIG["order_received_date"],
-        CONFIG["order_upload_date"],
+        CONFIG[
+            "order_received_date"
+        ],
+
+        CONFIG[
+            "order_upload_date"
+        ],
+
         CONFIG["channel"],
+
         CONFIG["zone"],
-        CONFIG["order_category"],
-        CONFIG["external_document"],
 
-        CONFIG["order_value"],
-        CONFIG["invoice_value"],
+        CONFIG[
+            "order_category"
+        ],
 
-        CONFIG["invoice_time"],
-        CONFIG["dispatch_to_delivery"],
+        CONFIG[
+            "external_document"
+        ],
+
+        CONFIG[
+            "order_value"
+        ],
+
+        CONFIG[
+            "invoice_value"
+        ],
+
+        CONFIG[
+            "invoice_time"
+        ],
+
+        CONFIG[
+            "dispatch_to_delivery"
+        ],
 
         CONFIG["otd_bucket"],
+
         CONFIG["order_to_wh"],
+
         CONFIG["oti"],
+
         CONFIG["otd"],
+
         CONFIG["otde"],
 
         CONFIG["otw_days"],
+
         CONFIG["invoice_days"],
+
         CONFIG["dispatch_days"],
 
-        CONFIG["sale_loss"],
-
         CONFIG["wh_remarks"],
+
         CONFIG["wh_remark"],
-        CONFIG["logistics_remarks"],
+
+        CONFIG[
+            "logistics_remarks"
+        ],
+
         CONFIG["ho_remarks"],
+
         CONFIG["omt_remarks"],
     ]
 
-    for requested in additional_cols:
+    for requested in additional_columns:
 
         actual = resolve_col(
             requested,
             rows.columns,
         )
 
-        if actual and actual not in seen:
+        if (
+            actual
+            and actual not in seen
+        ):
 
-            cols_present.append(
+            columns_to_show.append(
                 actual
             )
 
             seen.add(actual)
 
-    st.caption(
-        f"{len(rows):,} order rows for **{customer_name}**"
-    )
-
     # --------------------------------------------------------
-    # Sort by WH Receiving Date
+    # Sort
     # --------------------------------------------------------
 
     wh_date = resolve_col(
-        CONFIG["wh_receiving_date"],
+        CONFIG[
+            "wh_receiving_date"
+        ],
         rows.columns,
     )
 
     if wh_date:
 
-        display = rows[
-            cols_present
-        ].sort_values(
-            by=wh_date,
-            ascending=False,
+        display = (
+            rows[
+                columns_to_show
+            ]
+            .sort_values(
+                by=wh_date,
+                ascending=False,
+            )
         )
 
     else:
 
         display = rows[
-            cols_present
+            columns_to_show
         ]
+
+    st.caption(
+        f"{len(display):,} order rows for "
+        f"**{customer_name}**"
+    )
 
     # --------------------------------------------------------
     # Column config
@@ -1115,54 +1586,78 @@ def show_customer_details(
             format="%.1f%%",
         )
 
-    if CONFIG["sale_loss"] in display.columns:
+    numeric_columns = [
 
-        column_config[
-            CONFIG["sale_loss"]
-        ] = st.column_config.NumberColumn(
-            "Sale Loss",
-            format="₹ %.2f",
-        )
-
-    numeric_detail_cols = [
         CONFIG["order_qty"],
         CONFIG["invoice_qty"],
         CONFIG["order_value"],
         CONFIG["invoice_value"],
+
         CONFIG["standard_tat"],
-        CONFIG["actual_delivery_days"],
+        CONFIG[
+            "actual_delivery_days"
+        ],
+
         CONFIG["variance"],
-        CONFIG["dispatch_to_delivery"],
+
+        CONFIG[
+            "dispatch_to_delivery"
+        ],
+
         CONFIG["order_to_wh"],
         CONFIG["oti"],
         CONFIG["otd"],
         CONFIG["otde"],
+
         CONFIG["otw_days"],
         CONFIG["invoice_days"],
         CONFIG["dispatch_days"],
+
+        CONFIG["sale_loss"],
     ]
 
-    for col in numeric_detail_cols:
+    for col in numeric_columns:
 
         if col in display.columns:
 
             column_config[
                 col
             ] = st.column_config.NumberColumn(
-                col,
-                format="%.1f",
+                col
             )
 
-    date_cols = [
-        CONFIG["wh_receiving_date"],
-        CONFIG["order_received_date"],
-        CONFIG["order_upload_date"],
-        CONFIG["invoice_date"],
-        CONFIG["dispatch_date"],
-        CONFIG["delivery_date"],
+    # --------------------------------------------------------
+    # Date config
+    # --------------------------------------------------------
+
+    date_columns = [
+
+        CONFIG[
+            "wh_receiving_date"
+        ],
+
+        CONFIG[
+            "order_received_date"
+        ],
+
+        CONFIG[
+            "order_upload_date"
+        ],
+
+        CONFIG[
+            "invoice_date"
+        ],
+
+        CONFIG[
+            "dispatch_date"
+        ],
+
+        CONFIG[
+            "delivery_date"
+        ],
     ]
 
-    for col in date_cols:
+    for col in date_columns:
 
         if col in display.columns:
 
@@ -1177,7 +1672,7 @@ def show_customer_details(
         display,
         use_container_width=True,
         hide_index=True,
-        height=500,
+        height=540,
         column_config=column_config,
     )
 
@@ -1189,12 +1684,15 @@ def show_customer_details(
 st.markdown(
     """
     <div class="executive-header">
+
         <div class="executive-title">
             📊 Fill Rate & MOM Performance
         </div>
+
         <div class="executive-subtitle">
             Month-on-Month performance with customer-level operational drill-down
         </div>
+
     </div>
     """,
     unsafe_allow_html=True,
@@ -1202,33 +1700,35 @@ st.markdown(
 
 
 # ============================================================
-# SHAREPOINT
+# SHAREPOINT SECRET
 # ============================================================
 
-sp_url = st.secrets.get(
-    CONFIG["sharepoint_secret"],
+sharepoint_url = st.secrets.get(
+    CONFIG[
+        "sharepoint_secret"
+    ],
     "",
 )
 
-if not sp_url:
+if not sharepoint_url:
 
     st.error(
-        "No SharePoint link configured. "
-        "Add SHAREPOINT_EXCEL_URL to Streamlit Secrets."
+        "SHAREPOINT_EXCEL_URL is not configured "
+        "in Streamlit Secrets."
     )
 
     st.stop()
 
 
 # ============================================================
-# REFRESH
+# REFRESH BUTTON
 # ============================================================
 
-top_left, top_right = st.columns(
-    [6, 1]
+refresh_left, refresh_right = st.columns(
+    [8, 1]
 )
 
-with top_right:
+with refresh_right:
 
     if st.button(
         "🔄 Refresh",
@@ -1248,7 +1748,7 @@ with top_right:
 try:
 
     df, loaded_sheets = load_data(
-        sp_url
+        sharepoint_url
     )
 
     df = add_derived_metrics(
@@ -1258,7 +1758,7 @@ try:
 except Exception as e:
 
     st.error(
-        f"Could not load the live file: {e}"
+        f"Could not load the live Excel file: {e}"
     )
 
     st.stop()
@@ -1268,27 +1768,36 @@ except Exception as e:
 # REQUIRED COLUMNS
 # ============================================================
 
-required_cols = [
+required_columns = [
+
     CONFIG["customer"],
+
     CONFIG["order_qty"],
+
     CONFIG["invoice_qty"],
+
     CONFIG["order_id"],
 ]
 
-missing = [
-    c
-    for c in required_cols
+missing_columns = [
+
+    col
+
+    for col in required_columns
+
     if resolve_col(
-        c,
+        col,
         df.columns,
     ) is None
 ]
 
-if missing:
+if missing_columns:
 
     st.error(
-        "Missing required columns: "
-        + ", ".join(missing)
+        "Required columns are missing: "
+        + ", ".join(
+            missing_columns
+        )
     )
 
     st.stop()
@@ -1305,6 +1814,10 @@ with st.expander(
 
     f1, f2, f3 = st.columns(3)
 
+    # --------------------------------------------------------
+    # Month
+    # --------------------------------------------------------
+
     with f1:
 
         available_months = sorted(
@@ -1318,83 +1831,126 @@ with st.expander(
             default=available_months,
         )
 
+    # --------------------------------------------------------
+    # Name
+    # --------------------------------------------------------
+
     with f2:
 
-        chain_col = CONFIG["name"]
+        name_col = resolve_col(
+            CONFIG["name"],
+            df.columns,
+        )
 
-        chain_options = sorted(
-            df[chain_col]
-            .dropna()
-            .astype(str)
-            .unique()
-            .tolist()
+        name_options = (
+            sorted(
+                df[name_col]
+                .dropna()
+                .astype(str)
+                .unique()
+                .tolist()
+            )
+            if name_col
+            else []
         )
 
         selected_names = st.multiselect(
             "Name",
-            chain_options,
+            name_options,
         )
+
+    # --------------------------------------------------------
+    # Category
+    # --------------------------------------------------------
 
     with f3:
 
         category_options = sorted(
-            df[CONFIG["category"]]
+            df[
+                CONFIG["category"]
+            ]
             .dropna()
             .astype(str)
             .unique()
             .tolist()
         )
 
-        selected_categories = st.multiselect(
-            "Category",
-            category_options,
+        selected_categories = (
+            st.multiselect(
+                "Category",
+                category_options,
+            )
         )
+
+    # --------------------------------------------------------
+    # Channel
+    # --------------------------------------------------------
 
     f4, f5, f6 = st.columns(3)
 
     with f4:
 
-        invoice_options = sorted(
-            df[CONFIG["invoice_number"]]
+        channel_options = sorted(
+            df[
+                CONFIG["channel"]
+            ]
             .dropna()
             .astype(str)
             .unique()
             .tolist()
         )
 
-        selected_invoices = st.multiselect(
-            "InvoiceNumber",
-            invoice_options,
+        selected_channels = (
+            st.multiselect(
+                "Channel",
+                channel_options,
+            )
         )
+
+    # --------------------------------------------------------
+    # Zone
+    # --------------------------------------------------------
 
     with f5:
 
-        order_options = sorted(
-            df[CONFIG["order_id"]]
+        zone_options = sorted(
+            df[
+                CONFIG["zone"]
+            ]
             .dropna()
             .astype(str)
             .unique()
             .tolist()
         )
 
-        selected_orders = st.multiselect(
-            "Order Id",
-            order_options,
+        selected_zones = (
+            st.multiselect(
+                "Zone",
+                zone_options,
+            )
         )
+
+    # --------------------------------------------------------
+    # Customer
+    # --------------------------------------------------------
 
     with f6:
 
-        final_options = sorted(
-            df[CONFIG["final_remarks"]]
+        customer_options = sorted(
+            df[
+                CONFIG["customer"]
+            ]
             .dropna()
             .astype(str)
             .unique()
             .tolist()
         )
 
-        selected_final = st.multiselect(
-            "Final Remarks",
-            final_options,
+        selected_customers = (
+            st.multiselect(
+                "Customer",
+                customer_options,
+            )
         )
 
 
@@ -1404,12 +1960,16 @@ with st.expander(
 
 filtered = df.copy()
 
+
 if selected_months:
 
     filtered = filtered[
         filtered["Month"]
-        .isin(selected_months)
+        .isin(
+            selected_months
+        )
     ]
+
 
 if selected_names:
 
@@ -1418,8 +1978,11 @@ if selected_names:
             CONFIG["name"]
         ]
         .astype(str)
-        .isin(selected_names)
+        .isin(
+            selected_names
+        )
     ]
+
 
 if selected_categories:
 
@@ -1428,44 +1991,55 @@ if selected_categories:
             CONFIG["category"]
         ]
         .astype(str)
-        .isin(selected_categories)
+        .isin(
+            selected_categories
+        )
     ]
 
-if selected_invoices:
+
+if selected_channels:
 
     filtered = filtered[
         filtered[
-            CONFIG["invoice_number"]
+            CONFIG["channel"]
         ]
         .astype(str)
-        .isin(selected_invoices)
+        .isin(
+            selected_channels
+        )
     ]
 
-if selected_orders:
+
+if selected_zones:
 
     filtered = filtered[
         filtered[
-            CONFIG["order_id"]
+            CONFIG["zone"]
         ]
         .astype(str)
-        .isin(selected_orders)
+        .isin(
+            selected_zones
+        )
     ]
 
-if selected_final:
+
+if selected_customers:
 
     filtered = filtered[
         filtered[
-            CONFIG["final_remarks"]
+            CONFIG["customer"]
         ]
         .astype(str)
-        .isin(selected_final)
+        .isin(
+            selected_customers
+        )
     ]
 
 
 if filtered.empty:
 
     st.warning(
-        "No rows match the current filters."
+        "No records match the selected filters."
     )
 
     st.stop()
@@ -1480,9 +2054,17 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Determine latest and previous selected month
+
+# ============================================================
+# SELECTED MONTHS
+# ============================================================
+
 selected_sorted = sorted(
-    filtered["Month"].dropna().unique(),
+    filtered[
+        "Month"
+    ]
+    .dropna()
+    .unique(),
     key=month_sort_key,
 )
 
@@ -1498,179 +2080,608 @@ previous_month = (
     else None
 )
 
-latest_df = filtered[
-    filtered["Month"] == latest_month
-] if latest_month else filtered
 
-previous_df = filtered[
-    filtered["Month"] == previous_month
-] if previous_month else pd.DataFrame()
+latest_df = (
+
+    filtered[
+        filtered[
+            "Month"
+        ]
+        == latest_month
+    ]
+
+    if latest_month
+
+    else filtered
+)
 
 
-def metric_values(data):
+previous_df = (
 
-    oq = data[
+    filtered[
+        filtered[
+            "Month"
+        ]
+        == previous_month
+    ]
+
+    if previous_month
+
+    else pd.DataFrame()
+)
+
+
+# ============================================================
+# EXECUTIVE METRICS
+# ============================================================
+
+def calculate_metrics(data):
+
+    order_qty = data[
         CONFIG["order_qty"]
     ].sum()
 
-    iq = data[
+    invoice_qty = data[
         CONFIG["invoice_qty"]
     ].sum()
 
-    ov = data[
+    order_value = data[
         CONFIG["order_value"]
     ].sum()
 
-    iv = data[
+    invoice_value = data[
         CONFIG["invoice_value"]
     ].sum()
 
-    sale = data[
+    sale_loss = data[
         CONFIG["sale_loss"]
     ].sum()
 
-    frq = safe_ratio(
-        iq,
-        oq,
+    fill_rate_qty = safe_ratio(
+        invoice_qty,
+        order_qty,
     )
 
-    frv = safe_ratio(
-        iv,
-        ov,
+    fill_rate_value = safe_ratio(
+        invoice_value,
+        order_value,
+    )
+
+    pending_qty = (
+        order_qty
+        - invoice_qty
+    )
+
+    pending_value = (
+        order_value
+        - invoice_value
     )
 
     return {
-        "order_qty": oq,
-        "invoice_qty": iq,
-        "order_value": ov,
-        "invoice_value": iv,
-        "sale_loss": sale,
-        "fr_qty": frq,
-        "fr_value": frv,
-        "pending_qty": oq - iq,
-        "pending_value": ov - iv,
+
+        "order_qty": order_qty,
+
+        "invoice_qty": invoice_qty,
+
+        "fill_rate_qty": fill_rate_qty,
+
+        "pending_qty": pending_qty,
+
+        "order_value": order_value,
+
+        "invoice_value": invoice_value,
+
+        "fill_rate_value": fill_rate_value,
+
+        "sale_loss": sale_loss,
+
+        "pending_value": pending_value,
     }
 
 
-current_metrics = metric_values(
+current = calculate_metrics(
     latest_df
 )
 
-previous_metrics = (
-    metric_values(previous_df)
+previous = (
+    calculate_metrics(
+        previous_df
+    )
     if not previous_df.empty
     else None
 )
 
 
-# ------------------------------------------------------------
-# Cleaner Executive KPI cards
-# ------------------------------------------------------------
+# ============================================================
+# DELTA FUNCTIONS
+# ============================================================
 
-if latest_month:
+def numeric_delta(
+    current_value,
+    previous_value,
+):
 
-    st.caption(
-        f"Current Month: **{latest_month}**"
-        + (
-            f"  |  Previous Month: **{previous_month}**"
-            if previous_month
-            else ""
-        )
+    if previous_value is None:
+        return None
+
+    difference = (
+        current_value
+        - previous_value
+    )
+
+    sign = (
+        "+"
+        if difference > 0
+        else ""
+    )
+
+    return (
+        f"{sign}"
+        f"{difference:,.0f}"
     )
 
 
-k1, k2, k3, k4 = st.columns(4)
+def percentage_delta(
+    current_value,
+    previous_value,
+):
 
-k1.metric(
-    "Fill Rate — Qty",
-    format_percent(
-        current_metrics["fr_qty"]
-    ),
-    (
-        f"{current_metrics['fr_qty'] - previous_metrics['fr_qty']:+.1f} pp"
-        if previous_metrics
-        else None
-    ),
+    if previous_value is None:
+        return None
+
+    difference = (
+        current_value
+        - previous_value
+    )
+
+    sign = (
+        "+"
+        if difference > 0
+        else ""
+    )
+
+    return (
+        f"{sign}"
+        f"{difference:.1f}%"
+    )
+
+
+def currency_delta(
+    current_value,
+    previous_value,
+):
+
+    if previous_value is None:
+        return None
+
+    difference = (
+        current_value
+        - previous_value
+    )
+
+    sign = (
+        "+"
+        if difference > 0
+        else ""
+    )
+
+    return (
+        f"{sign}₹ "
+        f"{difference:,.0f}"
+    )
+
+
+def business_delta_color(
+    current_value,
+    previous_value,
+    higher_is_better=True,
+):
+
+    if previous_value is None:
+        return "off"
+
+    difference = (
+        current_value
+        - previous_value
+    )
+
+    if difference == 0:
+        return "off"
+
+    if higher_is_better:
+
+        return (
+            "normal"
+            if difference > 0
+            else "inverse"
+        )
+
+    # Lower is better
+    return (
+        "normal"
+        if difference < 0
+        else "inverse"
+    )
+
+
+# ============================================================
+# CURRENT / PREVIOUS MONTH LABEL
+# ============================================================
+
+if latest_month:
+
+    if previous_month:
+
+        st.caption(
+            f"Current Month: **{latest_month}**"
+            f"  |  "
+            f"Previous Month: **{previous_month}**"
+        )
+
+    else:
+
+        st.caption(
+            f"Current Month: **{latest_month}**"
+        )
+
+
+# ============================================================
+# EXECUTIVE ROW 1
+#
+# Order Qty
+# Invoice Qty
+# Fill Rate Qty
+# Pending Qty
+# ============================================================
+
+r1c1, r1c2, r1c3, r1c4 = (
+    st.columns(4)
 )
 
-k2.metric(
-    "Fill Rate — Value",
-    format_percent(
-        current_metrics["fr_value"]
-    ),
-    (
-        f"{current_metrics['fr_value'] - previous_metrics['fr_value']:+.1f} pp"
-        if previous_metrics
-        else None
-    ),
-)
 
-k3.metric(
-    "Pending Qty",
-    format_number(
-        current_metrics["pending_qty"]
-    ),
-    (
-        f"{current_metrics['pending_qty'] - previous_metrics['pending_qty']:+,.0f}"
-        if previous_metrics
-        else None
-    ),
-)
+# ------------------------------------------------------------
+# ORDER QTY
+# ------------------------------------------------------------
 
-k4.metric(
-    "Sale Loss",
-    format_value(
-        current_metrics["sale_loss"]
-    ),
-    (
-        f"₹ {current_metrics['sale_loss'] - previous_metrics['sale_loss']:+,.0f}"
-        if previous_metrics
-        else None
-    ),
-)
+r1c1.metric(
 
-
-k5, k6, k7, k8 = st.columns(4)
-
-k5.metric(
     "Order Qty",
+
     format_number(
-        current_metrics["order_qty"]
+        current[
+            "order_qty"
+        ]
     ),
+
+    numeric_delta(
+        current[
+            "order_qty"
+        ],
+
+        previous[
+            "order_qty"
+        ]
+        if previous
+        else None,
+    )
+    if previous
+    else None,
+
 )
 
-k6.metric(
+
+# ------------------------------------------------------------
+# INVOICE QTY
+# ------------------------------------------------------------
+
+r1c2.metric(
+
     "Invoice Qty",
+
     format_number(
-        current_metrics["invoice_qty"]
+        current[
+            "invoice_qty"
+        ]
     ),
+
+    numeric_delta(
+        current[
+            "invoice_qty"
+        ],
+
+        previous[
+            "invoice_qty"
+        ]
+        if previous
+        else None,
+    )
+    if previous
+    else None,
+
 )
 
-k7.metric(
+
+# ------------------------------------------------------------
+# FILL RATE QTY
+# Higher is better
+# ------------------------------------------------------------
+
+r1c3.metric(
+
+    "Fill Rate — Qty",
+
+    format_percent(
+        current[
+            "fill_rate_qty"
+        ]
+    ),
+
+    percentage_delta(
+        current[
+            "fill_rate_qty"
+        ],
+
+        previous[
+            "fill_rate_qty"
+        ]
+        if previous
+        else None,
+    )
+    if previous
+    else None,
+
+    delta_color=business_delta_color(
+
+        current[
+            "fill_rate_qty"
+        ],
+
+        previous[
+            "fill_rate_qty"
+        ]
+        if previous
+        else None,
+
+        higher_is_better=True,
+    ),
+
+)
+
+
+# ------------------------------------------------------------
+# PENDING QTY
+# Lower is better
+# ------------------------------------------------------------
+
+r1c4.metric(
+
+    "Pending Qty",
+
+    format_number(
+        current[
+            "pending_qty"
+        ]
+    ),
+
+    numeric_delta(
+
+        current[
+            "pending_qty"
+        ],
+
+        previous[
+            "pending_qty"
+        ]
+        if previous
+        else None,
+    )
+    if previous
+    else None,
+
+    delta_color=business_delta_color(
+
+        current[
+            "pending_qty"
+        ],
+
+        previous[
+            "pending_qty"
+        ]
+        if previous
+        else None,
+
+        higher_is_better=False,
+    ),
+
+)
+
+
+# ============================================================
+# EXECUTIVE ROW 2
+#
+# Order Value
+# Invoice Value
+# Fill Rate Value
+# Sale Loss
+# ============================================================
+
+r2c1, r2c2, r2c3, r2c4 = (
+    st.columns(4)
+)
+
+
+# ------------------------------------------------------------
+# ORDER VALUE
+# ------------------------------------------------------------
+
+r2c1.metric(
+
     "Order Value",
+
     format_value(
-        current_metrics["order_value"]
+        current[
+            "order_value"
+        ]
     ),
+
+    currency_delta(
+
+        current[
+            "order_value"
+        ],
+
+        previous[
+            "order_value"
+        ]
+        if previous
+        else None,
+    )
+    if previous
+    else None,
+
 )
 
-k8.metric(
+
+# ------------------------------------------------------------
+# INVOICE VALUE
+# ------------------------------------------------------------
+
+r2c2.metric(
+
     "Invoice Value",
+
     format_value(
-        current_metrics["invoice_value"]
+        current[
+            "invoice_value"
+        ]
     ),
+
+    currency_delta(
+
+        current[
+            "invoice_value"
+        ],
+
+        previous[
+            "invoice_value"
+        ]
+        if previous
+        else None,
+    )
+    if previous
+    else None,
+
+)
+
+
+# ------------------------------------------------------------
+# FILL RATE VALUE
+# Higher is better
+# ------------------------------------------------------------
+
+r2c3.metric(
+
+    "Fill Rate — Value",
+
+    format_percent(
+        current[
+            "fill_rate_value"
+        ]
+    ),
+
+    percentage_delta(
+
+        current[
+            "fill_rate_value"
+        ],
+
+        previous[
+            "fill_rate_value"
+        ]
+        if previous
+        else None,
+    )
+    if previous
+    else None,
+
+    delta_color=business_delta_color(
+
+        current[
+            "fill_rate_value"
+        ],
+
+        previous[
+            "fill_rate_value"
+        ]
+        if previous
+        else None,
+
+        higher_is_better=True,
+    ),
+
+)
+
+
+# ------------------------------------------------------------
+# SALE LOSS
+# Lower is better
+# ------------------------------------------------------------
+
+r2c4.metric(
+
+    "Sale Loss",
+
+    format_value(
+        current[
+            "sale_loss"
+        ]
+    ),
+
+    currency_delta(
+
+        current[
+            "sale_loss"
+        ],
+
+        previous[
+            "sale_loss"
+        ]
+        if previous
+        else None,
+    )
+    if previous
+    else None,
+
+    delta_color=business_delta_color(
+
+        current[
+            "sale_loss"
+        ],
+
+        previous[
+            "sale_loss"
+        ]
+        if previous
+        else None,
+
+        higher_is_better=False,
+    ),
+
 )
 
 
 # ============================================================
-# TABS
+# MAIN TABS
 # ============================================================
 
-tab_mom, tab_customer, tab_category = st.tabs(
-    [
-        "📈 MOM Overview",
-        "🏪 Customer Wise",
-        "📦 Category Wise",
-    ]
+tab_mom, tab_customer, tab_category = (
+    st.tabs(
+        [
+            "📈 MOM Overview",
+            "🏪 Customer Wise",
+            "📦 Category Wise",
+        ]
+    )
 )
 
 
@@ -1685,16 +2696,19 @@ with tab_mom:
     )
 
     # ========================================================
-    # 1. MOM FILL RATE COMPARISON — FIRST
+    # 1. FIRST CHART:
+    # MONTH-ON-MONTH FILL RATE
     # ========================================================
 
     st.markdown(
-        '<div class="section-title">Month-on-Month Fill Rate Comparison</div>',
+        '<div class="section-title">'
+        'Month-on-Month Fill Rate Comparison'
+        '</div>',
         unsafe_allow_html=True,
     )
 
     st.caption(
-        "Quantity and Value Fill Rate across the selected months."
+        "Monthly comparison of Fill Rate by Quantity and Value."
     )
 
     fr_data = monthly[
@@ -1706,70 +2720,100 @@ with tab_mom:
     ].copy()
 
     fr_long = fr_data.melt(
-        id_vars=["Month"],
+
+        id_vars=[
+            "Month"
+        ],
+
         value_vars=[
             "fr_qty",
             "fr_value",
         ],
+
         var_name="Metric",
+
         value_name="Fill Rate",
     )
 
-    fr_long["Metric"] = fr_long[
-        "Metric"
-    ].replace(
-        {
-            "fr_qty": "Fill Rate Qty",
-            "fr_value": "Fill Rate Value",
-        }
+    fr_long["Metric"] = (
+        fr_long[
+            "Metric"
+        ]
+        .replace(
+            {
+                "fr_qty":
+                    "Fill Rate Qty",
+
+                "fr_value":
+                    "Fill Rate Value",
+            }
+        )
     )
 
-    # Horizontal labels, visible labels
+    # --------------------------------------------------------
+    # Line chart
+    # --------------------------------------------------------
+
     fr_chart = (
-        alt.Chart(fr_long)
+
+        alt.Chart(
+            fr_long
+        )
+
         .mark_line(
             point=alt.OverlayMarkDef(
                 filled=True,
-                size=85,
+                size=80,
             ),
             strokeWidth=3,
         )
+
         .encode(
+
             x=alt.X(
                 "Month:N",
                 sort=available_months,
                 title="Month",
+
                 axis=alt.Axis(
                     labelAngle=0,
                     labelFontSize=13,
                     titleFontSize=13,
                 ),
             ),
+
             y=alt.Y(
                 "Fill Rate:Q",
                 title="Fill Rate (%)",
+
                 axis=alt.Axis(
                     labelAngle=0,
                     labelFontSize=12,
                     titleFontSize=13,
                 ),
+
                 scale=alt.Scale(
                     zero=False
                 ),
             ),
+
             color=alt.Color(
                 "Metric:N",
                 title="Metric",
             ),
+
             tooltip=[
+
                 alt.Tooltip(
                     "Month:N",
                     title="Month",
                 ),
+
                 alt.Tooltip(
                     "Metric:N",
                     title="Metric",
                 ),
+
                 alt.Tooltip(
                     "Fill Rate:Q",
                     title="Fill Rate",
@@ -1777,31 +2821,44 @@ with tab_mom:
                 ),
             ],
         )
+
         .properties(
             height=380
         )
     )
 
-    # Visible point labels
+    # --------------------------------------------------------
+    # Labels
+    # --------------------------------------------------------
+
     fr_labels = (
-        alt.Chart(fr_long)
+
+        alt.Chart(
+            fr_long
+        )
+
         .mark_text(
             dy=-12,
             fontSize=12,
             fontWeight="bold",
         )
+
         .encode(
+
             x=alt.X(
                 "Month:N",
                 sort=available_months,
             ),
+
             y=alt.Y(
                 "Fill Rate:Q"
             ),
+
             text=alt.Text(
                 "Fill Rate:Q",
                 format=".1f",
             ),
+
             color=alt.Color(
                 "Metric:N",
                 legend=None,
@@ -1820,31 +2877,68 @@ with tab_mom:
     # ========================================================
 
     st.markdown(
-        '<div class="section-title">Month-on-Month Table</div>',
+        '<div class="section-title">'
+        'Month-on-Month Table'
+        '</div>',
         unsafe_allow_html=True,
     )
 
-    # User can choose columns anytime
-    available_mom_columns = {
-        "Order Qty": "order_qty",
-        "Invoice Qty": "invoice_qty",
-        "Fill Rate Qty": "fr_qty",
-        "Pending Qty": "pending_qty",
-        "Order Value": "order_value",
-        "Invoice Value": "invoice_value",
-        "Fill Rate Value": "fr_value",
-        "Pending Value": "pending_value",
-        "Sale Loss": "sale_loss",
-        "Orders": "orders",
-        "Invoices": "invoices",
+    st.caption(
+        "Choose the columns you want to see. You can change this anytime."
+    )
+
+    mom_columns = {
+
+        "Order Qty":
+            "order_qty",
+
+        "Invoice Qty":
+            "invoice_qty",
+
+        "Fill Rate Qty":
+            "fr_qty",
+
+        "Pending Qty":
+            "pending_qty",
+
+        "Order Value":
+            "order_value",
+
+        "Invoice Value":
+            "invoice_value",
+
+        "Fill Rate Value":
+            "fr_value",
+
+        "Pending Value":
+            "pending_value",
+
+        "Sale Loss":
+            "sale_loss",
+
+        "Orders":
+            "orders",
+
+        "Invoices":
+            "invoices",
     }
 
-    default_mom_columns = [
+    default_columns = [
+
         "Order Qty",
+
         "Invoice Qty",
+
         "Fill Rate Qty",
+
         "Pending Qty",
+
+        "Order Value",
+
+        "Invoice Value",
+
         "Fill Rate Value",
+
         "Sale Loss",
     ]
 
@@ -1853,74 +2947,96 @@ with tab_mom:
         expanded=False,
     ):
 
-        selected_mom_columns = st.multiselect(
-            "Columns to show",
-            list(
-                available_mom_columns.keys()
-            ),
-            default=default_mom_columns,
-            key="mom_table_columns",
+        selected_mom_columns = (
+            st.multiselect(
+
+                "Columns",
+
+                list(
+                    mom_columns.keys()
+                ),
+
+                default=default_columns,
+
+                key="mom_table_columns",
+            )
         )
 
     if not selected_mom_columns:
 
-        selected_mom_columns = default_mom_columns
-
+        selected_mom_columns = (
+            default_columns
+        )
 
     mom_display = monthly[
-        ["Month"]
-        + [
-            available_mom_columns[c]
-            for c in selected_mom_columns
+        [
+            "Month"
+        ]
+        +
+        [
+            mom_columns[c]
+            for c
+            in selected_mom_columns
         ]
     ].copy()
 
-    rename_reverse = {
+    rename_map = {
         value: key
         for key, value
-        in available_mom_columns.items()
+        in mom_columns.items()
     }
 
-    mom_display = mom_display.rename(
-        columns=rename_reverse
+    mom_display = (
+        mom_display
+        .rename(
+            columns=rename_map
+        )
     )
 
-    # Format display
+    # --------------------------------------------------------
+    # Format
+    # --------------------------------------------------------
+
     for col in mom_display.columns:
 
         if col == "Month":
             continue
 
         if (
-            "Fill Rate" in col
+            "Fill Rate"
+            in col
         ):
 
-            mom_display[col] = mom_display[
-                col
-            ].map(
-                lambda x:
-                "—"
-                if pd.isna(x)
-                else f"{x:.1f}%"
+            mom_display[col] = (
+                mom_display[col]
+                .map(
+                    lambda x:
+                    "—"
+                    if pd.isna(x)
+                    else f"{x:.1f}%"
+                )
             )
 
         elif (
-            "Value" in col
+            "Value"
+            in col
             or col == "Sale Loss"
         ):
 
-            mom_display[col] = mom_display[
-                col
-            ].map(
-                format_value
+            mom_display[col] = (
+                mom_display[col]
+                .map(
+                    format_value
+                )
             )
 
         else:
 
-            mom_display[col] = mom_display[
-                col
-            ].map(
-                format_number
+            mom_display[col] = (
+                mom_display[col]
+                .map(
+                    format_number
+                )
             )
 
     st.dataframe(
@@ -1935,7 +3051,9 @@ with tab_mom:
     # ========================================================
 
     st.markdown(
-        '<div class="section-title">Fill Rate — Qty vs Value</div>',
+        '<div class="section-title">'
+        'Fill Rate — Qty vs Value'
+        '</div>',
         unsafe_allow_html=True,
     )
 
@@ -1946,82 +3064,116 @@ with tab_mom:
             "fr_value",
         ]
     ].melt(
-        id_vars=["Month"],
+
+        id_vars=[
+            "Month"
+        ],
+
         var_name="Metric",
+
         value_name="Fill Rate",
     )
 
-    fr_compare["Metric"] = fr_compare[
-        "Metric"
-    ].replace(
-        {
-            "fr_qty": "Qty",
-            "fr_value": "Value",
-        }
+    fr_compare["Metric"] = (
+        fr_compare[
+            "Metric"
+        ]
+        .replace(
+            {
+                "fr_qty": "Qty",
+                "fr_value": "Value",
+            }
+        )
     )
 
     fr_bar = (
-        alt.Chart(fr_compare)
-        .mark_bar(
-            cornerRadiusTopLeft=4,
-            cornerRadiusTopRight=4,
+
+        alt.Chart(
+            fr_compare
         )
+
+        .mark_bar(
+            cornerRadiusTopLeft=5,
+            cornerRadiusTopRight=5,
+        )
+
         .encode(
+
             x=alt.X(
                 "Month:N",
                 sort=available_months,
                 title="Month",
+
                 axis=alt.Axis(
                     labelAngle=0
                 ),
             ),
+
             xOffset=alt.XOffset(
                 "Metric:N"
             ),
+
             y=alt.Y(
                 "Fill Rate:Q",
                 title="Fill Rate (%)",
             ),
+
             color=alt.Color(
                 "Metric:N",
                 title="Metric",
             ),
+
             tooltip=[
+
                 "Month:N",
+
                 "Metric:N",
+
                 alt.Tooltip(
                     "Fill Rate:Q",
+                    title="Fill Rate",
                     format=".1f",
                 ),
             ],
         )
+
         .properties(
             height=360
         )
     )
 
     fr_bar_labels = (
-        alt.Chart(fr_compare)
+
+        alt.Chart(
+            fr_compare
+        )
+
         .mark_text(
-            dy=-7,
+            dy=-8,
             fontSize=11,
             fontWeight="bold",
         )
+
         .encode(
+
             x=alt.X(
                 "Month:N",
                 sort=available_months,
             ),
+
             xOffset=alt.XOffset(
                 "Metric:N"
             ),
+
             y=alt.Y(
                 "Fill Rate:Q"
             ),
+
             text=alt.Text(
                 "Fill Rate:Q",
                 format=".1f",
             ),
+
             color=alt.Color(
                 "Metric:N",
                 legend=None,
@@ -2040,36 +3192,50 @@ with tab_mom:
     # ========================================================
 
     st.markdown(
-        '<div class="section-title">Sale Loss MOM</div>',
+        '<div class="section-title">'
+        'Sale Loss MOM'
+        '</div>',
         unsafe_allow_html=True,
     )
 
     if "sale_loss" in monthly.columns:
 
         sale_chart = (
-            alt.Chart(monthly)
+
+            alt.Chart(
+                monthly
+            )
+
             .mark_bar(
                 cornerRadiusTopLeft=5,
                 cornerRadiusTopRight=5,
             )
+
             .encode(
+
                 x=alt.X(
                     "Month:N",
                     sort=available_months,
                     title="Month",
+
                     axis=alt.Axis(
                         labelAngle=0
                     ),
                 ),
+
                 y=alt.Y(
                     "sale_loss:Q",
                     title="Sale Loss",
+
                     axis=alt.Axis(
                         labelAngle=0
                     ),
                 ),
+
                 tooltip=[
+
                     "Month:N",
+
                     alt.Tooltip(
                         "sale_loss:Q",
                         title="Sale Loss",
@@ -2077,26 +3243,35 @@ with tab_mom:
                     ),
                 ],
             )
+
             .properties(
                 height=350
             )
         )
 
         sale_labels = (
-            alt.Chart(monthly)
+
+            alt.Chart(
+                monthly
+            )
+
             .mark_text(
                 dy=-8,
                 fontSize=12,
                 fontWeight="bold",
             )
+
             .encode(
+
                 x=alt.X(
                     "Month:N",
                     sort=available_months,
                 ),
+
                 y=alt.Y(
                     "sale_loss:Q"
                 ),
+
                 text=alt.Text(
                     "sale_loss:Q",
                     format=",.0f",
@@ -2105,7 +3280,8 @@ with tab_mom:
         )
 
         st.altair_chart(
-            sale_chart + sale_labels,
+            sale_chart
+            + sale_labels,
             use_container_width=True,
         )
 
@@ -2115,51 +3291,161 @@ with tab_mom:
     # ========================================================
 
     st.markdown(
-        '<div class="section-title">Last Month vs This Month</div>',
+        '<div class="section-title">'
+        'Last Month vs This Month'
+        '</div>',
         unsafe_allow_html=True,
     )
 
     if len(monthly) >= 2:
 
-        prev = monthly.iloc[-2]
-        curr = monthly.iloc[-1]
+        previous_mom = (
+            monthly.iloc[-2]
+        )
 
-        p1, p2, p3, p4 = st.columns(4)
+        current_mom = (
+            monthly.iloc[-1]
+        )
+
+        p1, p2, p3, p4 = (
+            st.columns(4)
+        )
 
         p1.metric(
+
             "Fill Rate Qty",
+
             format_percent(
-                curr["fr_qty"]
+                current_mom[
+                    "fr_qty"
+                ]
             ),
-            f"{curr['fr_qty'] - prev['fr_qty']:+.1f} pp",
+
+            percentage_delta(
+                current_mom[
+                    "fr_qty"
+                ],
+
+                previous_mom[
+                    "fr_qty"
+                ],
+            ),
+
+            delta_color=(
+                "normal"
+                if current_mom[
+                    "fr_qty"
+                ]
+                >
+                previous_mom[
+                    "fr_qty"
+                ]
+                else "inverse"
+            ),
         )
 
         p2.metric(
+
             "Fill Rate Value",
+
             format_percent(
-                curr["fr_value"]
+                current_mom[
+                    "fr_value"
+                ]
             ),
-            f"{curr['fr_value'] - prev['fr_value']:+.1f} pp",
+
+            percentage_delta(
+                current_mom[
+                    "fr_value"
+                ],
+
+                previous_mom[
+                    "fr_value"
+                ],
+            ),
+
+            delta_color=(
+                "normal"
+                if current_mom[
+                    "fr_value"
+                ]
+                >
+                previous_mom[
+                    "fr_value"
+                ]
+                else "inverse"
+            ),
         )
 
         p3.metric(
+
             "Pending Qty",
+
             format_number(
-                curr["pending_qty"]
+                current_mom[
+                    "pending_qty"
+                ]
             ),
-            f"{curr['pending_qty'] - prev['pending_qty']:+,.0f}",
+
+            numeric_delta(
+                current_mom[
+                    "pending_qty"
+                ],
+
+                previous_mom[
+                    "pending_qty"
+                ],
+            ),
+
+            delta_color=(
+                "normal"
+                if current_mom[
+                    "pending_qty"
+                ]
+                <
+                previous_mom[
+                    "pending_qty"
+                ]
+                else "inverse"
+            ),
         )
 
         p4.metric(
+
             "Sale Loss",
+
             format_value(
-                curr.get("sale_loss", 0)
+                current_mom[
+                    "sale_loss"
+                ]
             ),
-            f"₹ {curr.get('sale_loss', 0) - prev.get('sale_loss', 0):+,.0f}",
+
+            currency_delta(
+                current_mom[
+                    "sale_loss"
+                ],
+
+                previous_mom[
+                    "sale_loss"
+                ],
+            ),
+
+            delta_color=(
+                "normal"
+                if current_mom[
+                    "sale_loss"
+                ]
+                <
+                previous_mom[
+                    "sale_loss"
+                ]
+                else "inverse"
+            ),
         )
 
         st.caption(
-            f"{prev['Month']} → {curr['Month']}"
+            f"{previous_mom['Month']} → "
+            f"{current_mom['Month']}"
         )
 
     else:
@@ -2176,38 +3462,42 @@ with tab_mom:
 with tab_customer:
 
     st.markdown(
-        '<div class="section-title">Customer Wise Performance</div>',
+        '<div class="section-title">'
+        'Customer Wise Performance'
+        '</div>',
         unsafe_allow_html=True,
     )
 
     st.caption(
-        "Original customer/shop logic retained — click a customer to open its complete order details."
+        "Click a customer name to open the complete order-level details."
+    )
+
+    customer_summary = (
+        build_customer_summary(
+            filtered
+        )
     )
 
     # --------------------------------------------------------
-    # Customer summary
-    # --------------------------------------------------------
-
-    customer_summary = build_customer_summary(
-        filtered
-    )
-
-    # --------------------------------------------------------
-    # Original search
+    # Search
     # --------------------------------------------------------
 
     customer_search = st.text_input(
-        "🔍 Search customer name",
+        "🔍 Search Customer",
         key="customer_search",
     )
 
-    shop_view = customer_summary.copy()
+    shop_view = (
+        customer_summary.copy()
+    )
 
     if customer_search:
 
         shop_view = shop_view[
             shop_view[
-                CONFIG["customer"]
+                CONFIG[
+                    "customer"
+                ]
             ]
             .astype(str)
             .str.contains(
@@ -2218,75 +3508,144 @@ with tab_customer:
         ]
 
     st.caption(
-        f"{len(shop_view):,} of {len(customer_summary):,} customers"
+        f"{len(shop_view):,} of "
+        f"{len(customer_summary):,} customers"
     )
 
 
     # --------------------------------------------------------
-    # Original column picker
+    # Columns
     # --------------------------------------------------------
 
     metric_options = [
+
+        "Order (count)",
+
+        "Invoice (count)",
+
         "Order Qty",
+
         "Invoice Qty",
+
         "Fill Rate",
+
+        "Sale Loss (In Lacs)",
+
+        "TAT (avg)",
     ]
 
-    if "order_count" in shop_view.columns:
-        metric_options.insert(
-            0,
-            "Order (count)"
-        )
+    available_metric_options = []
 
-    if "invoice_count" in shop_view.columns:
-        metric_options.insert(
-            1 if "order_count" in shop_view.columns else 0,
-            "Invoice (count)"
-        )
+    for metric in metric_options:
 
-    if "sale_loss" in shop_view.columns:
-        metric_options.append(
-            "Sale Loss (In Lacs)"
-        )
+        if metric == "Order (count)":
 
-    if "tat_avg" in shop_view.columns:
-        metric_options.append(
-            "TAT (avg)"
-        )
+            if (
+                "order_count"
+                in shop_view.columns
+            ):
+
+                available_metric_options.append(
+                    metric
+                )
+
+        elif metric == "Invoice (count)":
+
+            if (
+                "invoice_count"
+                in shop_view.columns
+            ):
+
+                available_metric_options.append(
+                    metric
+                )
+
+        elif metric == "Sale Loss (In Lacs)":
+
+            if (
+                "sale_loss"
+                in shop_view.columns
+            ):
+
+                available_metric_options.append(
+                    metric
+                )
+
+        elif metric == "TAT (avg)":
+
+            if (
+                "tat_avg"
+                in shop_view.columns
+            ):
+
+                available_metric_options.append(
+                    metric
+                )
+
+        else:
+
+            available_metric_options.append(
+                metric
+            )
 
     with st.expander(
-        "⚙️ Columns to show",
+        "⚙️ Choose Customer Table Columns",
         expanded=False,
     ):
 
-        visible_metrics = st.multiselect(
-            "Columns to show",
-            metric_options,
-            default=metric_options,
-            key="customer_visible_cols",
+        visible_metrics = (
+            st.multiselect(
+
+                "Columns",
+
+                available_metric_options,
+
+                default=available_metric_options,
+
+                key="customer_visible_cols",
+            )
         )
 
     if not visible_metrics:
 
-        visible_metrics = metric_options
+        visible_metrics = (
+            available_metric_options
+        )
 
+
+    # --------------------------------------------------------
+    # Sort
+    # --------------------------------------------------------
 
     SORT_KEY_MAP = {
-        "Order (count)": "order_count",
-        "Invoice (count)": "invoice_count",
-        "Order Qty": "order_qty",
-        "Invoice Qty": "invoice_qty",
-        "Fill Rate": "fill_rate",
-        "Sale Loss (In Lacs)": "sale_loss",
-        "TAT (avg)": "tat_avg",
+
+        "Order (count)":
+            "order_count",
+
+        "Invoice (count)":
+            "invoice_count",
+
+        "Order Qty":
+            "order_qty",
+
+        "Invoice Qty":
+            "invoice_qty",
+
+        "Fill Rate":
+            "fill_rate",
+
+        "Sale Loss (In Lacs)":
+            "sale_loss",
+
+        "TAT (avg)":
+            "tat_avg",
     }
 
 
-    # --------------------------------------------------------
-    # Original sort state
-    # --------------------------------------------------------
-
-    if "customer_sort_col" not in st.session_state:
+    if (
+        "customer_sort_col"
+        not in st.session_state
+    ):
 
         st.session_state[
             "customer_sort_col"
@@ -2297,7 +3656,10 @@ with tab_customer:
         ] = None
 
 
-    if "selected_customer" not in st.session_state:
+    if (
+        "selected_customer"
+        not in st.session_state
+    ):
 
         st.session_state[
             "selected_customer"
@@ -2305,22 +3667,26 @@ with tab_customer:
 
 
     def cycle_customer_sort(
-        col_key
+        column
     ):
 
-        current_col = st.session_state[
-            "customer_sort_col"
-        ]
+        current_col = (
+            st.session_state[
+                "customer_sort_col"
+            ]
+        )
 
-        current_dir = st.session_state[
-            "customer_sort_dir"
-        ]
+        current_dir = (
+            st.session_state[
+                "customer_sort_dir"
+            ]
+        )
 
-        if current_col != col_key:
+        if current_col != column:
 
             st.session_state[
                 "customer_sort_col"
-            ] = col_key
+            ] = column
 
             st.session_state[
                 "customer_sort_dir"
@@ -2344,50 +3710,116 @@ with tab_customer:
 
 
     def customer_arrow(
-        col_key
+        column
     ):
 
         if (
             st.session_state[
                 "customer_sort_col"
             ]
-            != col_key
+            != column
         ):
 
             return ""
 
         return (
             " ▲"
-            if st.session_state[
+            if
+            st.session_state[
                 "customer_sort_dir"
-            ] == "asc"
+            ]
+            == "asc"
             else " ▼"
         )
 
 
     # --------------------------------------------------------
-    # Original clickable customer table
+    # Apply sorting
     # --------------------------------------------------------
 
-    header_widths = [
-        3
-    ] + [
-        1
-    ] * len(visible_metrics)
+    active_sort = (
+        st.session_state[
+            "customer_sort_col"
+        ]
+    )
 
+    active_direction = (
+        st.session_state[
+            "customer_sort_dir"
+        ]
+    )
+
+    if active_sort:
+
+        sort_column = (
+
+            CONFIG[
+                "customer"
+            ]
+
+            if active_sort
+            == "__customer__"
+
+            else active_sort
+        )
+
+        shop_view = (
+            shop_view
+            .sort_values(
+                sort_column,
+
+                ascending=(
+                    active_direction
+                    == "asc"
+                ),
+
+                na_position="last",
+            )
+        )
+
+
+    # --------------------------------------------------------
+    # TABLE WIDTHS
+    # --------------------------------------------------------
+
+    table_widths = (
+        [3]
+        +
+        [1]
+        *
+        len(
+            visible_metrics
+        )
+    )
+
+
+    # ========================================================
+    # CUSTOMER TABLE
+    # ========================================================
 
     with st.container(
         key="fillrate_table"
     ):
 
-        header_cols = st.columns(
-            header_widths
+        # ----------------------------------------------------
+        # Header
+        # ----------------------------------------------------
+
+        header = st.columns(
+            table_widths,
+            gap="small",
         )
 
-        if header_cols[0].button(
-            f"{CONFIG['customer']}"
-            f"{customer_arrow('__customer__')}",
+        if header[0].button(
+
+            "Customer Name"
+            +
+            customer_arrow(
+                "__customer__"
+            ),
+
             key="customer_header",
+
             use_container_width=True,
         ):
 
@@ -2395,184 +3827,220 @@ with tab_customer:
                 "__customer__"
             )
 
-        for hc, label in zip(
-            header_cols[1:],
+            st.rerun()
+
+
+        for index, metric in enumerate(
             visible_metrics,
+            start=1,
         ):
 
-            key = SORT_KEY_MAP[
-                label
+            sort_key = SORT_KEY_MAP[
+                metric
             ]
 
-            if hc.button(
-                f"{label}"
-                f"{customer_arrow(key)}",
-                key=f"customer_header_{key}",
+            if header[index].button(
+
+                metric
+                +
+                customer_arrow(
+                    sort_key
+                ),
+
+                key=(
+                    "customer_header_"
+                    + sort_key
+                ),
+
                 use_container_width=True,
             ):
 
                 cycle_customer_sort(
-                    key
+                    sort_key
                 )
 
-
-        # Apply sort
-        active_col = st.session_state[
-            "customer_sort_col"
-        ]
-
-        active_dir = st.session_state[
-            "customer_sort_dir"
-        ]
-
-        if active_col:
-
-            sort_col = (
-                CONFIG["customer"]
-                if active_col
-                == "__customer__"
-                else active_col
-            )
-
-            shop_view = shop_view.sort_values(
-                sort_col,
-                ascending=(
-                    active_dir == "asc"
-                ),
-                na_position="last",
-            )
+                st.rerun()
 
 
         # ----------------------------------------------------
         # Rows
         # ----------------------------------------------------
 
-        for row_idx, row in (
+        for row_index, row in (
             shop_view
-            .reset_index(drop=True)
+            .reset_index(
+                drop=True
+            )
             .iterrows()
         ):
 
-            row_cols = st.columns(
-                header_widths
+            row_columns = st.columns(
+                table_widths,
+                gap="small",
             )
 
-            if row_cols[0].button(
-                str(
-                    row[
-                        CONFIG["customer"]
+            # ----------------------------------------------
+            # Customer name
+            # ----------------------------------------------
+
+            customer_name = str(
+                row[
+                    CONFIG[
+                        "customer"
                     ]
-                ),
+                ]
+            )
+
+            if row_columns[
+                0
+            ].button(
+
+                customer_name,
+
                 key=(
-                    f"customer_btn_"
-                    f"{row_idx}_"
-                    f"{row[CONFIG['customer']]}"
+                    "customer_row_"
+                    f"{row_index}_"
+                    f"{hash(customer_name)}"
                 ),
+
                 use_container_width=True,
             ):
 
                 st.session_state[
                     "selected_customer"
-                ] = row[
-                    CONFIG["customer"]
-                ]
+                ] = customer_name
 
                 st.rerun()
 
 
-            for rc, label in zip(
-                row_cols[1:],
+            # ----------------------------------------------
+            # Metrics
+            # ----------------------------------------------
+
+            for col_index, metric in enumerate(
                 visible_metrics,
+                start=1,
             ):
 
-                if label == "Order (count)":
+                target = row_columns[
+                    col_index
+                ]
+
+                if metric == "Order (count)":
 
                     center(
-                        rc,
-                        f"{int(row['order_count']):,}",
-                    )
+                        target,
 
-                elif label == "Invoice (count)":
-
-                    center(
-                        rc,
-                        f"{int(row['invoice_count']):,}",
-                    )
-
-                elif label == "Order Qty":
-
-                    center(
-                        rc,
-                        f"{row['order_qty']:,.0f}",
-                    )
-
-                elif label == "Invoice Qty":
-
-                    center(
-                        rc,
-                        f"{row['invoice_qty']:,.0f}",
-                    )
-
-                elif label == "Fill Rate":
-
-                    value = row[
-                        "fill_rate"
-                    ]
-
-                    center(
-                        rc,
-                        (
-                            "—"
-                            if pd.isna(value)
-                            else f"{value:.1f}%"
+                        format_number(
+                            row[
+                                "order_count"
+                            ]
                         ),
                     )
 
-                elif label == "Sale Loss (In Lacs)":
-
-                    value = row.get(
-                        "sale_loss"
-                    )
+                elif metric == "Invoice (count)":
 
                     center(
-                        rc,
-                        (
-                            "—"
-                            if value is None
-                            or pd.isna(value)
-                            else f"₹ {value:,.2f}"
+                        target,
+
+                        format_number(
+                            row[
+                                "invoice_count"
+                            ]
                         ),
                     )
 
-                elif label == "TAT (avg)":
-
-                    value = row.get(
-                        "tat_avg"
-                    )
+                elif metric == "Order Qty":
 
                     center(
-                        rc,
+                        target,
+
+                        format_number(
+                            row[
+                                "order_qty"
+                            ]
+                        ),
+                    )
+
+                elif metric == "Invoice Qty":
+
+                    center(
+                        target,
+
+                        format_number(
+                            row[
+                                "invoice_qty"
+                            ]
+                        ),
+                    )
+
+                elif metric == "Fill Rate":
+
+                    center(
+                        target,
+
+                        format_percent(
+                            row[
+                                "fill_rate"
+                            ]
+                        ),
+                    )
+
+                elif (
+                    metric
+                    == "Sale Loss (In Lacs)"
+                ):
+
+                    center(
+                        target,
+
                         (
                             "—"
-                            if value is None
-                            or pd.isna(value)
-                            else f"{value:.1f}"
+                            if pd.isna(
+                                row[
+                                    "sale_loss"
+                                ]
+                            )
+
+                            else
+                            f"₹ "
+                            f"{row['sale_loss']:,.2f}"
+                        ),
+                    )
+
+                elif metric == "TAT (avg)":
+
+                    center(
+                        target,
+
+                        (
+                            "—"
+                            if pd.isna(
+                                row[
+                                    "tat_avg"
+                                ]
+                            )
+
+                            else
+                            f"{row['tat_avg']:.1f}"
                         ),
                     )
 
 
     # --------------------------------------------------------
-    # Open original-style dialog
+    # Detail popup
     # --------------------------------------------------------
 
-    if st.session_state.get(
-        "selected_customer"
-    ):
+    selected_customer = (
+        st.session_state.get(
+            "selected_customer"
+        )
+    )
+
+    if selected_customer:
 
         show_customer_details(
-            st.session_state[
-                "selected_customer"
-            ],
+            selected_customer,
             filtered,
         )
 
@@ -2584,107 +4052,234 @@ with tab_customer:
 with tab_category:
 
     st.markdown(
-        '<div class="section-title">Category Wise Performance</div>',
+        '<div class="section-title">'
+        'Category Wise Performance'
+        '</div>',
         unsafe_allow_html=True,
     )
 
-    category_col = CONFIG["category"]
-
     category_summary = (
+
         filtered
+
         .groupby(
-            category_col,
+            CONFIG[
+                "category"
+            ],
+
             dropna=False,
         )
+
         .agg(
+
             order_qty=(
-                CONFIG["order_qty"],
+                CONFIG[
+                    "order_qty"
+                ],
+
                 "sum",
             ),
+
             invoice_qty=(
-                CONFIG["invoice_qty"],
+                CONFIG[
+                    "invoice_qty"
+                ],
+
                 "sum",
             ),
+
             order_value=(
-                CONFIG["order_value"],
+                CONFIG[
+                    "order_value"
+                ],
+
                 "sum",
             ),
+
             invoice_value=(
-                CONFIG["invoice_value"],
+                CONFIG[
+                    "invoice_value"
+                ],
+
                 "sum",
             ),
+
             sale_loss=(
-                CONFIG["sale_loss"],
+                CONFIG[
+                    "sale_loss"
+                ],
+
                 "sum",
             ),
+
             orders=(
-                CONFIG["order_id"],
+                CONFIG[
+                    "order_id"
+                ],
+
                 "nunique",
             ),
         )
+
         .reset_index()
     )
 
-    category_summary["fr_qty"] = np.where(
-        category_summary["order_qty"] != 0,
-        category_summary["invoice_qty"]
-        / category_summary["order_qty"]
-        * 100,
-        np.nan,
-    )
-
-    category_summary["fr_value"] = np.where(
-        category_summary["order_value"] != 0,
-        category_summary["invoice_value"]
-        / category_summary["order_value"]
-        * 100,
-        np.nan,
-    )
-
-    category_summary["pending_qty"] = (
-        category_summary["order_qty"]
-        - category_summary["invoice_qty"]
-    )
-
-    category_summary["pending_value"] = (
-        category_summary["order_value"]
-        - category_summary["invoice_value"]
-    )
-
 
     # --------------------------------------------------------
-    # Category table
+    # FR
     # --------------------------------------------------------
 
-    category_display = category_summary[
-        [
-            category_col,
-            "orders",
-            "order_qty",
-            "invoice_qty",
-            "fr_qty",
-            "fr_value",
-            "pending_qty",
-            "order_value",
-            "invoice_value",
-            "pending_value",
-            "sale_loss",
+    category_summary[
+        "fr_qty"
+    ] = np.where(
+
+        category_summary[
+            "order_qty"
+        ] != 0,
+
+        category_summary[
+            "invoice_qty"
         ]
-    ].rename(
-        columns={
-            category_col: "Category",
-            "orders": "Orders",
-            "order_qty": "Order Qty",
-            "invoice_qty": "Invoice Qty",
-            "fr_qty": "FR % Qty",
-            "fr_value": "FR % Value",
-            "pending_qty": "Pending Qty",
-            "order_value": "Order Value",
-            "invoice_value": "Invoice Value",
-            "pending_value": "Pending Value",
-            "sale_loss": "Sale Loss",
-        }
+        /
+        category_summary[
+            "order_qty"
+        ]
+        * 100,
+
+        np.nan,
     )
+
+
+    category_summary[
+        "fr_value"
+    ] = np.where(
+
+        category_summary[
+            "order_value"
+        ] != 0,
+
+        category_summary[
+            "invoice_value"
+        ]
+        /
+        category_summary[
+            "order_value"
+        ]
+        * 100,
+
+        np.nan,
+    )
+
+
+    category_summary[
+        "pending_qty"
+    ] = (
+
+        category_summary[
+            "order_qty"
+        ]
+
+        -
+
+        category_summary[
+            "invoice_qty"
+        ]
+    )
+
+
+    category_summary[
+        "pending_value"
+    ] = (
+
+        category_summary[
+            "order_value"
+        ]
+
+        -
+
+        category_summary[
+            "invoice_value"
+        ]
+    )
+
+
+    # ========================================================
+    # CATEGORY TABLE
+    # ========================================================
+
+    category_display = (
+
+        category_summary[
+
+            [
+
+                CONFIG[
+                    "category"
+                ],
+
+                "orders",
+
+                "order_qty",
+
+                "invoice_qty",
+
+                "fr_qty",
+
+                "fr_value",
+
+                "pending_qty",
+
+                "order_value",
+
+                "invoice_value",
+
+                "pending_value",
+
+                "sale_loss",
+            ]
+        ]
+
+        .rename(
+            columns={
+
+                CONFIG[
+                    "category"
+                ]:
+                    "Category",
+
+                "orders":
+                    "Orders",
+
+                "order_qty":
+                    "Order Qty",
+
+                "invoice_qty":
+                    "Invoice Qty",
+
+                "fr_qty":
+                    "FR % Qty",
+
+                "fr_value":
+                    "FR % Value",
+
+                "pending_qty":
+                    "Pending Qty",
+
+                "order_value":
+                    "Order Value",
+
+                "invoice_value":
+                    "Invoice Value",
+
+                "pending_value":
+                    "Pending Value",
+
+                "sale_loss":
+                    "Sale Loss",
+            }
+        )
+    )
+
 
     st.dataframe(
         category_display,
@@ -2693,49 +4288,60 @@ with tab_category:
     )
 
 
-    # --------------------------------------------------------
-    # Category Fill Rate Chart
-    # --------------------------------------------------------
+    # ========================================================
+    # CATEGORY FR CHART
+    # ========================================================
 
     st.markdown(
-        '<div class="section-title">Category Fill Rate</div>',
+        '<div class="section-title">'
+        'Category Fill Rate'
+        '</div>',
         unsafe_allow_html=True,
     )
 
-    category_chart_data = category_summary[
-        [
-            category_col,
-            "fr_qty",
-        ]
-    ].copy()
-
     category_chart = (
+
         alt.Chart(
-            category_chart_data
+            category_summary
         )
+
         .mark_bar(
             cornerRadiusTopLeft=5,
             cornerRadiusTopRight=5,
         )
+
         .encode(
+
             x=alt.X(
-                f"{category_col}:N",
+                f"{CONFIG['category']}:N",
+
                 title="Category",
+
                 sort="-y",
+
                 axis=alt.Axis(
                     labelAngle=0,
                     labelFontSize=12,
                 ),
             ),
+
             y=alt.Y(
                 "fr_qty:Q",
+
                 title="Fill Rate (%)",
+
                 axis=alt.Axis(
                     labelAngle=0
                 ),
             ),
+
             tooltip=[
-                f"{category_col}:N",
+
+                alt.Tooltip(
+                    f"{CONFIG['category']}:N",
+                    title="Category",
+                ),
+
                 alt.Tooltip(
                     "fr_qty:Q",
                     title="Fill Rate",
@@ -2743,28 +4349,36 @@ with tab_category:
                 ),
             ],
         )
+
         .properties(
             height=380
         )
     )
 
+
     category_labels = (
+
         alt.Chart(
-            category_chart_data
+            category_summary
         )
+
         .mark_text(
             dy=-8,
             fontSize=12,
             fontWeight="bold",
         )
+
         .encode(
+
             x=alt.X(
-                f"{category_col}:N",
+                f"{CONFIG['category']}:N",
                 sort="-y",
             ),
+
             y=alt.Y(
                 "fr_qty:Q"
             ),
+
             text=alt.Text(
                 "fr_qty:Q",
                 format=".1f",
@@ -2772,9 +4386,12 @@ with tab_category:
         )
     )
 
+
     st.altair_chart(
         category_chart
-        + category_labels,
+        +
+        category_labels,
+
         use_container_width=True,
     )
 
@@ -2789,7 +4406,9 @@ st.caption(
     f"Monthly sheets detected: "
     f"{', '.join(loaded_sheets)}"
     f"  |  "
-    f"Filtered rows: {len(filtered):,}"
+    f"Filtered rows: "
+    f"{len(filtered):,}"
     f"  |  "
-    f"Updated: {datetime.now().strftime('%d-%m-%Y %H:%M')}"
+    f"Updated: "
+    f"{datetime.now().strftime('%d-%m-%Y %H:%M')}"
 )
