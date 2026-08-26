@@ -11,11 +11,12 @@ Reads the same live dispatch tracker used by the other pages
      the shop table below.
   3. A summary table, one row per shop ("Customer Name"), with total
      Order Qty / Invoice Qty / Fill Rate / Sale Loss / TAT (avg) for
-     that shop. Click any column in the "Sort by" control to sort by
-     it (toggle Ascending to flip direction). Click a shop's name (a
-     plain button — no checkboxes) to open a detail popup with every
-     individual order row for that shop, including DB Code, Category
-     and TAT (shown as the very last column).
+     that shop. Click any column header to sort by it (toggles
+     Ascending -> Descending -> Normal). Click a shop's name (a plain
+     button — no checkboxes) to open a detail popup with every
+     individual order row for that shop, including DB Code, Category,
+     Standard TAT (right after Actual Deli. Days), and TAT (shown as
+     the very last column).
 
 Drop this file into the same pages/ folder as the other dashboard
 pages. Rename with a leading number (e.g. 4_Fill_Rate.py) to control
@@ -27,9 +28,11 @@ NOTE ON ASSUMPTIONS (edit CONFIG below if any of these are wrong):
     usually has many of each) — not a single ID. The full IDs are
     all visible in the per-shop detail popup.
   - "Wh Receiving Date", "Invoice Date", "Delivery Date",
-    "Actual Deli. Days", "Variance", "DB Code", "Category" are
-    assumed to already exist as columns in the dispatch tracker
-    (same naming as the sheet).
+    "Actual Deli. Days", "Variance", "DB Code", "Category",
+    "Standard TAT" are assumed to already exist as columns in the
+    dispatch tracker (same naming as the sheet). Column matching is
+    case/whitespace-tolerant, so small header differences (extra
+    spaces, different casing) still resolve correctly.
   - "TAT" is assumed to be its own column already in (or being added
     to) the dispatch tracker sheet, holding a number (days). We don't
     rename/relabel it — whatever header you give it in the sheet is
@@ -86,7 +89,7 @@ PERCENT_COL_HINTS = ["%"]
 # Excel often leaves numeric-looking columns as text (stray spaces,
 # commas, a blank cell forcing the whole column to object dtype) —
 # which makes pandas' groupby(...).sum()/.mean() raise a TypeError.
-# Force these to numeric explicitly.
+# Force these to numeric explicitly. "tat" also catches "Standard TAT".
 QTY_COL_HINTS = ["qty", "quantity", "tat"]
 
 C_BG = "#F4F6FA"
@@ -95,6 +98,20 @@ C_BG = "#F4F6FA"
 def _looks_like(col, hints):
     c = col.lower()
     return any(h in c for h in hints)
+
+
+def _resolve_col(target, available_cols):
+    """Match a configured column name against the sheet's real headers,
+    tolerating case and stray whitespace differences (e.g. CONFIG says
+    "Standard TAT" but the sheet has " standard tat " or "STANDARD TAT").
+    Returns the actual column name to use, or None if no match at all."""
+    if target in available_cols:
+        return target
+    target_key = target.strip().lower()
+    for c in available_cols:
+        if str(c).strip().lower() == target_key:
+            return c
+    return None
 
 
 def _sharepoint_download_url(url: str) -> str:
@@ -421,21 +438,11 @@ if shop_search:
 st.caption(f"{len(shop_view):,} of {len(shop_agg):,} shops")
 
 
-@st.dialog("Shop Order Details", width="large")
-def _resolve_col(target, available_cols):
-    """Match a configured column name against the sheet's real headers,
-    tolerating case and stray whitespace differences (e.g. CONFIG says
-    "Standard TAT" but the sheet has " standard tat " or "STANDARD TAT").
-    Returns the actual column name to use, or None if no match at all."""
-    if target in available_cols:
-        return target
-    target_key = target.strip().lower()
-    for c in available_cols:
-        if str(c).strip().lower() == target_key:
-            return c
-    return None
+def _clear_selected_shop():
+    st.session_state["fillrate_selected_shop"] = None
 
 
+@st.dialog("Shop Order Details", width="large", on_dismiss=_clear_selected_shop)
 def show_shop_details(shop_name):
     rows = filtered[filtered[shop_col].astype(str) == str(shop_name)].copy()
     if rows.empty:
@@ -443,9 +450,10 @@ def show_shop_details(shop_name):
         return
     rows["Fill Rate"] = _fill_rate(rows[iqty_col], rows[oqty_col])
 
-    # TAT stays at the very end of the row — whatever header this
-    # column has in the source sheet is what will display, since we
-    # don't relabel it below.
+    # Standard TAT sits right after Actual Deli. Days; TAT itself
+    # stays at the very end of the row. Whatever header these columns
+    # have in the source sheet is what will display, since we don't
+    # relabel them below.
     pref_cols = [
         CONFIG["wh_receiving_date_column"], shop_col,
         CONFIG["db_code_column"], CONFIG["category_column"], oid_col,
@@ -456,7 +464,8 @@ def show_shop_details(shop_name):
     ]
     # Resolve each configured name to whatever the sheet actually calls
     # it (case/whitespace-tolerant) so a small header mismatch doesn't
-    # silently drop the column.
+    # silently drop the column — and never add the same sheet column
+    # twice under two different labels.
     resolved = {}
     cols_present = []
     seen_actual = set()
@@ -467,35 +476,23 @@ def show_shop_details(shop_name):
         actual = _resolve_col(c, rows.columns)
         if actual is not None:
             resolved[c] = actual
-            # Skip if this actual sheet column was already added under a
-            # different CONFIG name (e.g. "Standard TAT" resolving to the
-            # exact same header as "TAT") — otherwise the table shows the
-            # same data twice under two labels.
             if actual not in seen_actual:
                 cols_present.append(actual)
                 seen_actual.add(actual)
 
     missing_msgs = []
     if standard_tat_col not in resolved:
-        missing_msgs.append(
-            f"Couldn't find a '{standard_tat_col}' column in the sheet."
-        )
+        missing_msgs.append(f"Couldn't find a '{standard_tat_col}' column in the sheet.")
     elif resolved.get(standard_tat_col) == resolved.get(tat_col):
         missing_msgs.append(
             f"'{standard_tat_col}' and '{tat_col}' both matched the same "
             f"sheet column ('{resolved.get(tat_col)}') — the sheet likely "
-            f"doesn't have a separate Standard TAT header yet, so only one "
-            f"copy is shown."
-        )
-    if CONFIG["variance_column"] not in resolved:
-        missing_msgs.append(
-            f"Couldn't find a '{CONFIG['variance_column']}' column in the sheet."
+            f"doesn't have a separate Standard TAT header yet."
         )
     if missing_msgs:
         st.caption("⚠️ " + " ".join(missing_msgs))
-
-    with st.expander("Debug: exact column headers in this sheet"):
-        st.write(list(rows.columns))
+        with st.expander("Debug: exact column headers in this sheet"):
+            st.write(list(rows.columns))
 
     st.caption(f"{len(rows):,} order rows for **{shop_name}**")
 
@@ -532,6 +529,9 @@ def show_shop_details(shop_name):
 if "fillrate_sort_col" not in st.session_state:
     st.session_state["fillrate_sort_col"] = None       # "__shop__" or a SORT_KEY_MAP value
     st.session_state["fillrate_sort_dir"] = None        # "asc" | "desc" | None
+
+if "fillrate_selected_shop" not in st.session_state:
+    st.session_state["fillrate_selected_shop"] = None
 
 
 def _cycle_sort(col_key: str):
@@ -579,7 +579,14 @@ with st.container(key="fillrate_table"):
     for row_idx, row in shop_view.reset_index(drop=True).iterrows():
         row_cols = st.columns(header_widths)
         if row_cols[0].button(str(row[shop_col]), key=f"shop_btn_{row_idx}_{row[shop_col]}", use_container_width=True):
-            show_shop_details(row[shop_col])
+            # Don't call the @st.dialog function directly from inside this
+            # per-row loop — with many buttons on the page, Streamlit can
+            # end up registering the dialog element twice in one run
+            # (StreamlitDuplicateElementId). Instead, just record which
+            # shop was clicked and open the dialog once, below, outside
+            # the loop.
+            st.session_state["fillrate_selected_shop"] = row[shop_col]
+            st.rerun()
         for rc, label in zip(row_cols[1:], visible_metrics):
             if label == "Order (count)":
                 _center(rc, f"{int(row['order_count']):,}")
@@ -598,3 +605,8 @@ with st.container(key="fillrate_table"):
             elif label == "TAT (avg)":
                 val = row.get("tat_avg")
                 _center(rc, "—" if val is None or pd.isna(val) else f"{val:.1f}")
+
+# Open the dialog exactly once per run, from this single call site —
+# never from inside the row loop above.
+if st.session_state.get("fillrate_selected_shop"):
+    show_shop_details(st.session_state["fillrate_selected_shop"])
